@@ -10,7 +10,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <style>
         /* ================= ESTILOS GERAIS ================= */
@@ -85,6 +84,7 @@
         #container-parcelas-geradas { max-height: 200px; overflow-y: auto; padding-right: 5px; }
         .item-parcela { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -107,9 +107,6 @@
                 <li data-route="produtos"><span class="material-icons">inventory_2</span> Produtos & Estoque</li>
                 <li data-route="notas_entrada"><span class="material-icons">receipt_long</span> Notas de Entrada</li>
                 <li data-route="financeiro"><span class="material-icons">attach_money</span> Financeiro</li>
-                <li data-route="relatorios"><span class="material-icons">bar_chart</span> Relatórios</li>
-                <li data-route="funcionarios"><span class="material-icons">badge</span> Funcionários</li>
-                <li data-route="fornecedores"><span class="material-icons">local_shipping</span> Fornecedores</li>
                 <li data-route="usuarios"><span class="material-icons">people</span> Usuários</li>
                 <li data-route="configuracoes"><span class="material-icons">settings</span> Configurações</li>
             </ul>
@@ -182,122 +179,118 @@
                     <tbody id="tabela-financeiro-corpo"></tbody>
                 </table>
             </div>
-            <div id="view-relatorios" class="view-section">
-                <div class="toolbar" style="gap:10px; flex-wrap: wrap;">
-                    <select id="rel_mes" style="max-width: 180px;"></select>
-                    <select id="rel_ano" style="max-width: 120px;"></select>
-                    <select id="rel_tipo" style="max-width: 190px;">
-                        <option value="todos">Todos</option>
-                        <option value="resumo">Resumo</option>
-                        <option value="financeiro">Financeiro</option>
-                        <option value="notas">Notas de Entrada</option>
-                        <option value="estoque">Estoque</option>
-                    </select>
-                    <select id="rel_status" style="max-width: 160px;">
-                        <option value="">Todos Status</option>
-                        <option value="Pago">Pago</option>
-                        <option value="Pendente">Pendente</option>
-                    </select>
-                    <select id="rel_fornecedor" style="max-width: 280px;">
-                        <option value="">Todos Fornecedores</option>
-                    </select>
 
-                    <button class="btn-action btn-add" id="btnGerarRelatorio">
-                        <span class="material-icons">refresh</span> Atualizar
-                    </button>
-                    <button class="btn-action" id="btnPDFRelatorio" style="background:#e74c3c">
-                        <span class="material-icons">picture_as_pdf</span> PDF
-                    </button>
-                </div>
+            <div <div id="view-relatorios" class="view-section">
+    <div class="toolbar" style="gap:10px; flex-wrap:wrap;">
+        <select id="rel_tipo" style="max-width:220px;">
+            <option value="todos">Todos</option>
+            <option value="resumo">Resumo</option>
+            <option value="financeiro">Financeiro</option>
+            <option value="notas">Notas de Entrada</option>
+            <option value="estoque">Estoque</option>
+        </select>
+        <select id="rel_status" style="max-width:180px;">
+            <option value="todos">Status: Todos</option>
+            <option value="Pago">Pago</option>
+            <option value="Pendente">Pendente</option>
+        </select>
+        <select id="rel_fornecedor" style="min-width:220px; max-width:320px;"></select>
+        <select id="rel_mes" style="max-width:180px;"></select>
+        <select id="rel_ano" style="max-width:120px;"></select>
 
-                <div id="relatorio-area">
-                    <div class="card-container" id="rel-bloco-resumo">
-                        <div class="card"><h3>Receitas do Mês</h3><div class="valor" id="rel-receitas">R$ 0,00</div></div>
-                        <div class="card"><h3>Despesas do Mês</h3><div class="valor" id="rel-despesas">R$ 0,00</div></div>
-                        <div class="card"><h3>Saldo do Mês</h3><div class="valor" id="rel-saldo">R$ 0,00</div></div>
-                    </div>
+        <button class="btn-action btn-add" id="btnGerarRelatorio">
+            <span class="material-icons">refresh</span> Atualizar
+        </button>
+        <button class="btn-action" id="btnPDFRelatorio" style="background:#e74c3c">
+            <span class="material-icons">picture_as_pdf</span> PDF
+        </button>
+    </div>
 
-                    <div style="margin-top:20px;" class="card-container" id="rel-bloco-estoque-cards">
-                        <div class="card"><h3>Itens em Estoque (Qtd)</h3><div class="valor" id="rel-estoque-qtd">0</div></div>
-                        <div class="card"><h3>Valor do Estoque</h3><div class="valor" id="rel-estoque-valor">R$ 0,00</div></div>
-                        <div class="card"><h3>Notas do Mês</h3><div class="valor" id="rel-notas">0</div></div>
-                    </div>
-
-                    <div style="margin-top:20px;" class="card-container" id="rel-bloco-graficos">
-                        <div class="card" style="flex:2; min-width: 280px;">
-                            <h3>Despesas por Status</h3>
-                            <canvas id="chart-despesas-status" height="120"></canvas>
-                        </div>
-                        <div class="card" style="flex:3; min-width: 320px;">
-                            <h3>Despesas por Fornecedor (Top 10)</h3>
-                            <canvas id="chart-despesas-fornecedor" height="120"></canvas>
-                        </div>
-                    </div>
-
-                    <div id="rel-bloco-financeiro">
-                        <h3 style="margin-top:25px;">Financeiro do Período</h3>
-                        <table>
-                            <thead><tr><th>Vencimento</th><th>Descrição</th><th>Tipo</th><th>Valor</th><th>Status</th></tr></thead>
-                            <tbody id="rel-financeiro-corpo"></tbody>
-                        </table>
-                    </div>
-
-                    <div id="rel-bloco-notas">
-                        <h3 style="margin-top:25px;">Notas de Entrada do Período</h3>
-                        <table>
-                            <thead><tr><th>Data</th><th>Número</th><th>Fornecedor</th><th>Itens</th><th>Valor</th><th>Tipo</th></tr></thead>
-                            <tbody id="rel-notas-corpo"></tbody>
-                        </table>
-                    </div>
-
-                    <div id="rel-bloco-estoque">
-                        <h3 style="margin-top:25px;">Produtos com Menor Estoque</h3>
-                        <table>
-                            <thead><tr><th>Cód.</th><th>Produto</th><th>Grupo</th><th>Qtd</th></tr></thead>
-                            <tbody id="rel-baixo-estoque-corpo"></tbody>
-                        </table>
-                    </div>
-                </div>
+    <div id="relatorio-area">
+        <div id="rel-bloco-resumo">
+            <div class="card-container">
+                <div class="card"><h3>Receitas do Mês</h3><div class="valor" id="rel-receitas">R$ 0,00</div></div>
+                <div class="card"><h3>Despesas do Mês</h3><div class="valor" id="rel-despesas">R$ 0,00</div></div>
+                <div class="card"><h3>Saldo do Mês</h3><div class="valor" id="rel-saldo">R$ 0,00</div></div>
             </div>
 
-            <div id="view-funcionarios" class="view-section">
-                <div class="filters toolbar" style="margin-bottom: 10px; gap:10px; flex-wrap:wrap;">
-                    <input type="text" id="busca-funcionarios" placeholder="Buscar funcionário..." style="flex:1; min-width: 220px;">
-                    <select id="filtro-funcionarios-ativo" style="max-width: 200px;">
-                        <option value="">Todos</option>
-                        <option value="true">Ativos</option>
-                        <option value="false">Inativos</option>
-                    </select>
-                </div>
-                <div class="toolbar">
-                    <button class="btn-action btn-add" id="btnNovoFuncionario"><span class="material-icons">add</span> Novo Funcionário</button>
-                </div>
-                <table>
-                    <thead><tr><th>Nome</th><th>Cargo</th><th>Contato</th><th>Status</th><th>Ações</th></tr></thead>
-                    <tbody id="tabela-funcionarios-corpo"></tbody>
-                </table>
+            <div style="margin-top:20px;" class="card-container">
+                <div class="card"><h3>Itens em Estoque (Qtd)</h3><div class="valor" id="rel-estoque-qtd">0</div></div>
+                <div class="card"><h3>Valor do Estoque</h3><div class="valor" id="rel-estoque-valor">R$ 0,00</div></div>
+                <div class="card"><h3>Notas do Mês</h3><div class="valor" id="rel-notas">0</div></div>
             </div>
 
-            <div id="view-fornecedores" class="view-section">
-                <div class="filters toolbar" style="margin-bottom: 10px; gap:10px; flex-wrap:wrap;">
-                    <input type="text" id="busca-fornecedores" placeholder="Buscar fornecedor..." style="flex:1; min-width: 220px;">
-                    <select id="filtro-fornecedores-ativo" style="max-width: 200px;">
-                        <option value="">Todos</option>
-                        <option value="true">Ativos</option>
-                        <option value="false">Inativos</option>
-                    </select>
+            <div style="margin-top:25px;" class="card-container">
+                <div class="card" style="min-width:320px; flex:1;">
+                    <h3>Despesas por Status</h3>
+                    <canvas id="chart-despesas-status" height="120"></canvas>
                 </div>
-                <div class="toolbar">
-                    <button class="btn-action btn-add" id="btnNovoFornecedor"><span class="material-icons">add</span> Novo Fornecedor</button>
+                <div class="card" style="min-width:320px; flex:1;">
+                    <h3>Despesas por Fornecedor (Top 10)</h3>
+                    <canvas id="chart-despesas-fornecedor" height="120"></canvas>
                 </div>
-                <table>
-                    <thead><tr><th>Nome</th><th>CNPJ/CPF</th><th>Contato</th><th>Status</th><th>Ações</th></tr></thead>
-                    <tbody id="tabela-fornecedores-corpo"></tbody>
-                </table>
             </div>
+        </div>
 
+        <div id="rel-bloco-financeiro" style="margin-top:25px;">
+            <h3>Financeiro do Período</h3>
+            <table>
+                <thead><tr><th>Vencimento</th><th>Descrição</th><th>Tipo</th><th>Valor</th><th>Status</th></tr></thead>
+                <tbody id="rel-financeiro-corpo"></tbody>
+            </table>
+        </div>
 
-            <div id="view-usuarios" class="view-section">
+        <div id="rel-bloco-notas" style="margin-top:25px;">
+            <h3>Notas de Entrada do Período</h3>
+            <table>
+                <thead><tr><th>Data</th><th>Número</th><th>Fornecedor</th><th>Itens</th><th>Valor</th><th>Tipo</th></tr></thead>
+                <tbody id="rel-notas-corpo"></tbody>
+            </table>
+        </div>
+
+        <div id="rel-bloco-estoque" style="margin-top:25px;">
+            <h3>Produtos com Menor Estoque</h3>
+            <table>
+                <thead><tr><th>Cód.</th><th>Produto</th><th>Grupo</th><th>Qtd</th></tr></thead>
+                <tbody id="rel-baixo-estoque-corpo"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="view-fornecedores" class="view-section">
+    <div class="toolbar" style="gap:10px; flex-wrap:wrap;">
+        <button class="btn-action btn-add" id="btnNovoFornecedor"><span class="material-icons">add</span> Novo Fornecedor</button>
+        <input type="text" id="busca-fornecedores" placeholder="Buscar fornecedor..." style="max-width:260px;">
+        <select id="filtro-fornecedores-ativo" style="max-width:200px;">
+            <option value="todos">Todos</option>
+            <option value="ativos">Ativos</option>
+            <option value="inativos">Inativos</option>
+        </select>
+    </div>
+    <table>
+        <thead><tr><th>Nome</th><th>Contato</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tabela-fornecedores-corpo"></tbody>
+    </table>
+</div>
+
+<div id="view-funcionarios" class="view-section">
+    <div class="toolbar" style="gap:10px; flex-wrap:wrap;">
+        <button class="btn-action btn-add" id="btnNovoFuncionario"><span class="material-icons">add</span> Novo Funcionário</button>
+        <input type="text" id="busca-funcionarios" placeholder="Buscar funcionário..." style="max-width:260px;">
+        <select id="filtro-funcionarios-ativo" style="max-width:200px;">
+            <option value="todos">Todos</option>
+            <option value="ativos">Ativos</option>
+            <option value="inativos">Inativos</option>
+        </select>
+    </div>
+    <table>
+        <thead><tr><th>Nome</th><th>Cargo</th><th>Contato</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tabela-funcionarios-corpo"></tbody>
+    </table>
+</div>
+
+            id="view-usuarios" class="view-section">
                 <div class="toolbar">
                     <button class="btn-action btn-add" id="btnNovoUsuario"><span class="material-icons">add</span> Novo Usuário</button>
                 </div>
@@ -353,7 +346,7 @@
                 <div class="form-row" style="background: #f9f9f9; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
                     <div class="form-group" style="flex:1"><label>Número</label><input type="text" id="nota_numero"></div>
                     <div class="form-group" style="flex:1"><label>Data</label><input type="date" id="nota_data"></div>
-                    <div class="form-group" style="flex:2"><label>Fornecedor</label><select id="nota_fornecedor"><option value="">Selecione...</option></select></div>
+                    <div class="form-group" style="flex:2"><label>Fornecedor</label><select id="nota_fornecedor"></select></div>
                 </div>
 
                 <div style="border-top: 1px dashed #ccc; padding-top: 10px; margin-bottom: 10px;">
@@ -402,7 +395,7 @@
                 </div>
 
                 <div class="form-group"><label>Descrição</label><input type="text" id="fin_man_descricao"></div>
-                <div class="form-group"><label>Fornecedor / Cliente</label><select id="fin_man_fornecedor"><option value="">Selecione...</option></select></div>
+                <div class="form-group"><label>Fornecedor / Cliente</label><select id="fin_man_fornecedor"></select></div>
                 
                 <div class="form-row">
                     <div class="form-group"><label>Valor Total</label><input type="number" id="fin_man_valor" step="0.01"></div>
@@ -484,24 +477,62 @@
     
     <script src="app.js"></script>
 
+<!-- MODAL FORNECEDOR -->
+<div id="modal-fornecedor" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3>Fornecedor</h3>
+        <form id="form-fornecedor">
+            <input type="hidden" id="forn_id_edit">
+            <div class="form-row">
+                <div class="form-group" style="flex:2"><label>Nome</label><input type="text" id="forn_nome" required></div>
+                <div class="form-group"><label>CNPJ/CPF</label><input type="text" id="forn_cnpj"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Telefone</label><input type="text" id="forn_tel"></div>
+                <div class="form-group"><label>Email</label><input type="email" id="forn_email"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:2"><label>Endereço</label><input type="text" id="forn_endereco"></div>
+                <div class="form-group"><label>UF</label><input type="text" id="forn_uf" maxlength="2"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:2"><label>Cidade</label><input type="text" id="forn_cidade"></div>
+                <div class="form-group"><label>Ativo</label>
+                    <select id="forn_ativo">
+                        <option value="true">Ativo</option>
+                        <option value="false">Inativo</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group"><label>Observações</label><textarea id="forn_obs" rows="3"></textarea></div>
 
-    <div id="modal-funcionario" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h3>Cadastro de Funcionário</h3>
-            <input type="hidden" id="func_id">
-            <div class="form-group"><label>Nome</label><input type="text" id="func_nome"></div>
+            <button type="submit" class="btn-action btn-add" id="btnSalvarFornecedor">Salvar</button>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL FUNCIONÁRIO -->
+<div id="modal-funcionario" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3>Funcionário</h3>
+        <form id="form-funcionario">
+            <input type="hidden" id="func_id_edit">
             <div class="form-row">
-                <div class="form-group" style="flex:2"><label>Cargo</label><input type="text" id="func_cargo"></div>
-                <div class="form-group" style="flex:1"><label>Telefone</label><input type="text" id="func_telefone"></div>
+                <div class="form-group" style="flex:2"><label>Nome</label><input type="text" id="func_nome" required></div>
+                <div class="form-group"><label>Cargo</label><input type="text" id="func_cargo"></div>
             </div>
             <div class="form-row">
-                <div class="form-group" style="flex:2"><label>Email</label><input type="text" id="func_email"></div>
-                <div class="form-group" style="flex:1"><label>Salário</label><input type="number" id="func_salario" step="0.01"></div>
+                <div class="form-group"><label>Telefone</label><input type="text" id="func_tel"></div>
+                <div class="form-group"><label>Email</label><input type="email" id="func_email"></div>
             </div>
             <div class="form-row">
-                <div class="form-group" style="flex:1"><label>Data Admissão</label><input type="date" id="func_admissao"></div>
-                <div class="form-group" style="flex:1"><label>Status</label>
+                <div class="form-group"><label>Salário</label><input type="number" step="0.01" id="func_salario"></div>
+                <div class="form-group"><label>Data Admissão</label><input type="date" id="func_admissao"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Ativo</label>
                     <select id="func_ativo">
                         <option value="true">Ativo</option>
                         <option value="false">Inativo</option>
@@ -509,38 +540,10 @@
                 </div>
             </div>
             <div class="form-group"><label>Observações</label><textarea id="func_obs" rows="3"></textarea></div>
-            <button class="btn-action btn-add" id="btn-salvar-funcionario">Salvar</button>
-        </div>
-    </div>
 
-    <div id="modal-fornecedor" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h3>Cadastro de Fornecedor</h3>
-            <input type="hidden" id="forn_id">
-            <div class="form-group"><label>Nome</label><input type="text" id="forn_nome"></div>
-            <div class="form-row">
-                <div class="form-group" style="flex:1"><label>CNPJ/CPF</label><input type="text" id="forn_cnpj"></div>
-                <div class="form-group" style="flex:1"><label>Telefone</label><input type="text" id="forn_telefone"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group" style="flex:2"><label>Email</label><input type="text" id="forn_email"></div>
-                <div class="form-group" style="flex:1"><label>Status</label>
-                    <select id="forn_ativo">
-                        <option value="true">Ativo</option>
-                        <option value="false">Inativo</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-group"><label>Endereço</label><input type="text" id="forn_endereco"></div>
-            <div class="form-row">
-                <div class="form-group" style="flex:2"><label>Cidade</label><input type="text" id="forn_cidade"></div>
-                <div class="form-group" style="flex:1"><label>UF</label><input type="text" id="forn_uf" maxlength="2"></div>
-            </div>
-            <div class="form-group"><label>Observações</label><textarea id="forn_obs" rows="3"></textarea></div>
-            <button class="btn-action btn-add" id="btn-salvar-fornecedor">Salvar</button>
-        </div>
+            <button type="submit" class="btn-action btn-add" id="btnSalvarFuncionario">Salvar</button>
+        </form>
     </div>
-
+</div>
 </body>
 </html>
