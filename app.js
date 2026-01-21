@@ -1,9 +1,8 @@
 /* ==========================================================================
-   SISTEMA DE GESTÃO - APP PRINCIPAL
+   CONFIGURAÇÃO SUPABASE
    ========================================================================== */
 // OBS: As variáveis SUPABASE_URL e SUPABASE_KEY vêm do arquivo config.js
 
-// Inicializa o Supabase com as configurações carregadas
 const _db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = (id) => document.getElementById(id);
@@ -79,6 +78,7 @@ const Backend = {
         return await _db.from('financeiro').insert(dados);
     },
     async salvarFinanceiroLote(listaDados) {
+        // Salva múltiplas linhas de uma vez (para parcelas)
         return await _db.from('financeiro').insert(listaDados);
     },
     async excluirFinanceiro(id) {
@@ -431,22 +431,53 @@ window.editarFin = (id) => {
     if(item.tipo === 'Receita') $('opt-receita').click(); else $('opt-despesa').click();
     $('check_parcelado').checked = false; $('area-parcelas').style.display = 'none'; $('modal-nova-despesa').style.display = 'block';
 };
+
+/* --- CORREÇÃO PRINCIPAL AQUI --- */
 $('btn-salvar-fin-manual').onclick = async (e) => {
     e.preventDefault();
-    injetarCamposParcelamento();
+    injetarCamposParcelamento(); // Garante que a caixa de parcelas existe para verificação
+    
     const isEdit = $('fin_man_id') && $('fin_man_id').value !== "";
-    const isParcelado = $('check_parcelado').checked;
+    const checkboxParcelado = document.getElementById('check_parcelado');
+    // Verifica se checkbox existe e está marcado
+    const isParcelado = checkboxParcelado && checkboxParcelado.checked && !isEdit; 
+    
     const dadosBase = { tipo: state.tipoFinanceiro, descricao: $('fin_man_descricao').value, fornecedor: $('fin_man_fornecedor').value, data_emissao: $('fin_man_emissao').value, status: $('fin_man_status').value };
+
     if(isEdit) {
         dadosBase.id = $('fin_man_id').value; dadosBase.valor = parseFloat($('fin_man_valor').value); dadosBase.data_vencimento = $('fin_man_vencimento').value;
         await Backend.salvarFinanceiro(dadosBase);
     } else {
         if(isParcelado) {
-            const inputsData = document.querySelectorAll('.parc-data'); const inputsValor = document.querySelectorAll('.parc-valor'); const lista = [];
-            inputsData.forEach((inp, idx) => { lista.push({ ...dadosBase, descricao: `${dadosBase.descricao} (${idx+1}/${inputsData.length})`, data_vencimento: inp.value, valor: parseFloat(inputsValor[idx].value) }); });
-            await Backend.salvarFinanceiroLote(lista); 
+            // Garante que as parcelas visuais estão lá
+            const container = $('container-parcelas-geradas');
+            if(!container || container.innerHTML.trim() === "") {
+                gerarParcelasVisuais(); // Força gerar se estiver vazio
+            }
+            
+            const inputsData = document.querySelectorAll('.parc-data'); 
+            const inputsValor = document.querySelectorAll('.parc-valor'); 
+            const lista = [];
+            
+            inputsData.forEach((inp, idx) => { 
+                lista.push({ 
+                    ...dadosBase, 
+                    descricao: `${dadosBase.descricao} (${idx+1}/${inputsData.length})`, 
+                    data_vencimento: inp.value, 
+                    valor: parseFloat(inputsValor[idx].value) 
+                }); 
+            });
+            
+            if(lista.length > 0) {
+                await Backend.salvarFinanceiroLote(lista); 
+            } else {
+                alert("Erro ao gerar parcelas. Tente novamente.");
+                return;
+            }
         } else {
-            dadosBase.valor = parseFloat($('fin_man_valor').value); dadosBase.data_vencimento = $('fin_man_vencimento').value;
+            // Salvar normal (único)
+            dadosBase.valor = parseFloat($('fin_man_valor').value); 
+            dadosBase.data_vencimento = $('fin_man_vencimento').value;
             await Backend.salvarFinanceiro(dadosBase);
         }
     }
