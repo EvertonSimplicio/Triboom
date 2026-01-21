@@ -1,8 +1,10 @@
 /* ==========================================================================
    CONFIGURAÇÃO SUPABASE
    ========================================================================== */
-const SUPABASE_URL = 'https://vtrrwwjjcisimtputcbi.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_eIS0IVC7POg_K9mcV6pQMQ_OO9BgxW4';
+// URL e KEY do seu projeto (conforme suas imagens)
+const SUPABASE_URL = 'https://vtrrwwjjcisimtputcbi.supabase.co'; 
+const SUPABASE_KEY = 'sb_publishable_eIS0IVC7POg_K9mcV6pQMQ_OO9BgxW4'; // Copie a chave 'anon public'
+
 const _db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = (id) => document.getElementById(id);
@@ -21,8 +23,10 @@ let state = {
     grupos: [],
     route: 'dashboard',
     tipoFinanceiro: 'Despesa',
-    itemManualNota: [],
-    produtoContagem: null
+    
+    itensNotaManual: [], 
+    produtoContagemSelecionado: null,
+    itensContagem: [] 
 };
 
 /* ==========================================================================
@@ -48,6 +52,39 @@ const Backend = {
     async excluirProduto(id) {
         return await _db.from('produtos').delete().eq('id', id);
     },
+    
+    // --- ESTOQUE (CONTAGEM = SUBSTITUI) ---
+    async atualizarEstoqueBatch(itens) {
+        for (const item of itens) {
+            await _db.from('produtos').update({ qtd: item.novaQtd }).eq('id', item.id);
+        }
+        return true;
+    },
+
+    // --- ESTOQUE (ENTRADA DE NOTA = SOMA) ---
+    // Esta função mágica verifica se o produto existe e soma, ou cria se não existir
+    async processarEntradaEstoque(itens) {
+        for (const item of itens) {
+            // 1. Procura se já existe produto com esse código
+            const { data: existente } = await _db.from('produtos').select('*').eq('codigo', item.codigo).maybeSingle();
+            
+            if (existente) {
+                // SE EXISTE: Soma a quantidade atual com a nova
+                const novaQtd = Number(existente.qtd) + Number(item.qtd);
+                // Atualiza Qtd e também o Preço (assume o preço da nota como novo custo)
+                await _db.from('produtos').update({ qtd: novaQtd, preco: item.preco }).eq('id', existente.id);
+            } else {
+                // SE NÃO EXISTE: Cria automaticamente
+                await _db.from('produtos').insert([{
+                    codigo: item.codigo,
+                    nome: item.nome,
+                    grupo: 'Geral', // Grupo padrão
+                    qtd: Number(item.qtd),
+                    preco: Number(item.preco)
+                }]);
+            }
+        }
+    },
 
     // FINANCEIRO
     async getFinanceiro() {
@@ -62,14 +99,15 @@ const Backend = {
         return await _db.from('financeiro').delete().eq('id', id);
     },
 
-    // NOTAS
+    // NOTAS DE ENTRADA
     async getNotas() {
         const { data } = await _db.from('notas_entrada').select('*').order('data', { ascending: false });
         state.notas = data || [];
         return state.notas;
     },
     async salvarNota(nota) {
-        return await _db.from('notas_entrada').insert([nota]);
+        if(nota.id) return await _db.from('notas_entrada').update(nota).eq('id', nota.id).select();
+        return await _db.from('notas_entrada').insert([nota]).select();
     },
     async excluirNota(id) {
         return await _db.from('notas_entrada').delete().eq('id', id);
@@ -127,6 +165,7 @@ async function navegar(modulo) {
         renderUsuarios(await Backend.getUsuarios());
     } else if(modulo === 'notas_entrada') {
         $('view-notas-entrada').style.display = 'block';
+        if(state.produtos.length === 0) await Backend.getProdutos();
         renderNotas(await Backend.getNotas());
     } else if(modulo === 'configuracoes') {
         $('view-configuracoes').style.display = 'block';
@@ -149,7 +188,7 @@ function renderProdutos(lista) {
             <td><b>${p.codigo}</b></td><td>${p.nome}</td><td>${p.grupo}</td><td>${p.qtd}</td>
             <td style="color:#27ae60"><b>${money(p.preco)}</b></td>
             <td>
-                <span class="material-icons" onclick="editarProd('${p.id}')" style="cursor:pointer">edit</span>
+                <span class="material-icons" onclick="editarProd('${p.id}')" style="cursor:pointer; margin-right:5px;">edit</span>
                 <span class="material-icons" style="color:red; cursor:pointer" onclick="delProd('${p.id}')">delete</span>
             </td>
         </tr>`;
@@ -160,7 +199,6 @@ function renderProdutos(lista) {
 function renderFinanceiro(lista) {
     const termo = $('barra-pesquisa-financeiro').value.toLowerCase();
     const filtrado = lista.filter(i => i.descricao.toLowerCase().includes(termo) || i.fornecedor?.toLowerCase().includes(termo));
-    
     let rec = 0, desp = 0;
     $('tabela-financeiro-corpo').innerHTML = filtrado.map(i => {
         const val = parseFloat(i.valor);
@@ -185,7 +223,10 @@ function renderNotas(lista) {
         <td>${new Date(n.data).toLocaleDateString()}</td><td>${n.numero}</td><td>${n.fornecedor}</td>
         <td>${n.qtd_itens || 0}</td><td style="color:#27ae60"><b>${money(n.valor)}</b></td>
         <td><small>${n.tipo}</small></td>
-        <td><span class="material-icons" style="color:red; cursor:pointer" onclick="delNota('${n.id}')">delete</span></td>
+        <td>
+            <span class="material-icons" style="cursor:pointer; margin-right:8px;" onclick="editarNota('${n.id}')" title="Editar">edit</span>
+            <span class="material-icons" style="color:red; cursor:pointer" onclick="delNota('${n.id}')" title="Excluir">delete</span>
+        </td>
     </tr>`).join('');
 }
 
@@ -215,7 +256,7 @@ $('btnAbrirNovoProduto').onclick = () => {
     $('modal-produto').style.display = 'block';
 };
 window.editarProd = (id) => {
-    const p = state.produtos.find(x => x.id === id);
+    const p = state.produtos.find(x => x.id == id);
     if(!p) return;
     $('is_edit').value = 'true'; $('prod_id_edit').value = p.id;
     $('prod_codigo').value = p.codigo; $('prod_nome').value = p.nome;
@@ -233,7 +274,181 @@ $('btn-salvar-prod').onclick = async (e) => {
 };
 window.delProd = async (id) => { if(confirm('Excluir?')) { await Backend.excluirProduto(id); navegar('produtos'); } };
 
-// --- FINANCEIRO ---
+// ==========================================================================
+// --- NOTAS DE ENTRADA ---
+// ==========================================================================
+
+$('btnLancarNotaManual').onclick = () => {
+    $('form-nota-manual').reset(); state.itensNotaManual = [];
+    $('nota_is_edit').value = 'false'; $('nota_id_edicao').value = '';
+    $('titulo-modal-nota').innerText = "Lançamento Manual de Nota";
+    renderItensNotaManual();
+    $('modal-nota-manual').style.display = 'block';
+};
+
+function renderItensNotaManual() {
+    const tbody = $('tabela-itens-nota-manual');
+    let totalQtd = 0, totalValor = 0;
+    
+    if(state.itensNotaManual.length === 0) {
+        tbody.innerHTML = ''; $('msg-sem-itens').style.display = 'block';
+    } else {
+        $('msg-sem-itens').style.display = 'none';
+        tbody.innerHTML = state.itensNotaManual.map((item, idx) => {
+            totalQtd++; const totItem = Number(item.qtd) * Number(item.preco); totalValor += totItem;
+            return `<tr><td>${item.codigo || '-'}</td><td>${item.nome}</td><td>${item.qtd}</td><td>${money(item.preco)}</td><td>${money(totItem)}</td><td><span class="material-icons" style="color:red; cursor:pointer" onclick="removerItemNota(${idx})">delete</span></td></tr>`;
+        }).join('');
+    }
+    $('display-total-qtd').innerText = totalQtd; $('display-total-valor').innerText = money(totalValor);
+}
+
+$('btnAddItemNota').onclick = () => {
+    const nome = $('input-item-busca').value; const codigo = $('input-item-codigo').value;
+    const qtd = parseFloat($('input-item-qtd').value); const preco = parseFloat($('input-item-preco').value);
+    if(!nome || !qtd || !preco) return alert('Preencha os dados do item.');
+    state.itensNotaManual.push({ nome, codigo, qtd, preco });
+    renderItensNotaManual();
+    $('input-item-busca').value = ''; $('input-item-codigo').value = ''; $('input-item-qtd').value = ''; $('input-item-preco').value = ''; $('input-item-busca').focus();
+};
+
+window.removerItemNota = (idx) => { state.itensNotaManual.splice(idx, 1); renderItensNotaManual(); };
+
+$('input-item-busca').onkeyup = () => {
+    const termo = $('input-item-busca').value.toLowerCase();
+    const lista = $('lista-sugestoes-manual');
+    if(termo.length < 2) { lista.style.display = 'none'; return; }
+    const encontrados = state.produtos.filter(p => p.nome.toLowerCase().includes(termo));
+    if(encontrados.length > 0) {
+        lista.style.display = 'block';
+        lista.innerHTML = encontrados.map(p => `<li onclick="selecionarItemNota('${p.id}')"><strong>${p.nome}</strong> (R$ ${p.preco})</li>`).join('');
+    } else lista.style.display = 'none';
+};
+
+window.selecionarItemNota = (id) => {
+    const p = state.produtos.find(x => x.id == id);
+    if(p) {
+        $('input-item-busca').value = p.nome; $('input-item-codigo').value = p.codigo;
+        $('input-item-preco').value = p.preco; $('lista-sugestoes-manual').style.display = 'none'; $('input-item-qtd').focus();
+    }
+};
+
+// 5. SALVAR NOTA (COM ATUALIZAÇÃO DE ESTOQUE)
+$('btn-salvar-nota').onclick = async (e) => {
+    e.preventDefault();
+    const btn = $('btn-salvar-nota'); btn.disabled = true; btn.innerText = "Salvando...";
+    let valTotal = 0; state.itensNotaManual.forEach(i => valTotal += (i.qtd * i.preco));
+
+    const novaNota = {
+        id: $('nota_id_edicao').value || undefined,
+        numero: $('nota_numero').value, data: $('nota_data').value, fornecedor: $('nota_fornecedor').value,
+        qtd_itens: state.itensNotaManual.length, valor: valTotal, tipo: 'Manual',
+        itens_json: state.itensNotaManual
+    };
+
+    try {
+        await Backend.salvarNota(novaNota);
+        
+        // **MAGIA DO ESTOQUE AQUI**
+        // Só atualiza estoque se for nota nova (para não duplicar em edições)
+        if(!novaNota.id && state.itensNotaManual.length > 0) {
+             await Backend.processarEntradaEstoque(state.itensNotaManual);
+        }
+
+        alert('Nota salva e estoque atualizado!');
+        closeModal('modal-nota-manual'); navegar('notas_entrada');
+        if(!novaNota.id) abrirPerguntaFinanceiro(novaNota);
+
+    } catch (err) { alert('Erro ao salvar nota: ' + err.message); }
+    btn.disabled = false; btn.innerText = "Salvar Nota Completa";
+};
+
+window.editarNota = (id) => {
+    const n = state.notas.find(x => x.id == id);
+    if(!n) return;
+    $('nota_is_edit').value = 'true'; $('nota_id_edicao').value = n.id;
+    $('titulo-modal-nota').innerText = `Editar Nota ${n.numero}`;
+    $('nota_numero').value = n.numero; $('nota_data').value = n.data; $('nota_fornecedor').value = n.fornecedor;
+    state.itensNotaManual = n.itens_json || []; 
+    renderItensNotaManual();
+    $('modal-nota-manual').style.display = 'block';
+};
+
+window.delNota = async (id) => { if(confirm('Excluir nota?')) { await Backend.excluirNota(id); navegar('notas_entrada'); } };
+
+
+// --- FLUXO FINANCEIRO ---
+function abrirPerguntaFinanceiro(nota) {
+    $('fin_fornecedor').value = nota.fornecedor; $('fin_valor').value = nota.valor; $('fin_descricao').value = `Ref. Nota ${nota.numero}`;
+    const hoje = new Date(); hoje.setDate(hoje.getDate() + 30); $('fin_data_vencimento').valueAsDate = hoje;
+    $('modal-lancamento-financeiro').style.display = 'block';
+}
+
+$('form-financeiro-rapido').onsubmit = async (e) => {
+    e.preventDefault();
+    const dados = {
+        tipo: 'Despesa', descricao: $('fin_descricao').value, fornecedor: $('fin_fornecedor').value,
+        valor: parseFloat($('fin_valor').value), data_vencimento: $('fin_data_vencimento').value,
+        status: 'Pendente', data_emissao: new Date().toISOString().split('T')[0]
+    };
+    await Backend.salvarFinanceiro(dados);
+    alert('Lançado no Contas a Pagar!'); closeModal('modal-lancamento-financeiro');
+};
+$('btnCloseFinRapido').onclick = () => closeModal('modal-lancamento-financeiro');
+
+// --- CONTAGEM ---
+$('btnAbrirContagem').onclick = () => {
+    state.itensContagem = []; state.produtoContagemSelecionado = null;
+    $('lista-contagem-corpo').innerHTML = ''; $('msg-vazio-contagem').style.display = 'block';
+    $('input-busca-contagem').value = ''; $('input-qtd-contagem').value = '';
+    $('input-qtd-contagem').disabled = true; $('btn-add-contagem').disabled = true;
+    $('obs-contagem').value = ''; $('modal-contagem').style.display = 'block';
+};
+$('input-busca-contagem').onkeyup = () => {
+    const termo = $('input-busca-contagem').value.toLowerCase();
+    const lista = $('lista-sugestoes-contagem'); lista.innerHTML = '';
+    if(termo.length < 1) { lista.style.display = 'none'; return; }
+    const enc = state.produtos.filter(p => p.nome.toLowerCase().includes(termo) || String(p.codigo).includes(termo));
+    if(enc.length > 0) {
+        lista.style.display = 'block';
+        lista.innerHTML = enc.map(p => `<li onclick="selecionarProdutoContagem('${p.id}')"><strong>${p.nome}</strong> <small>(${p.codigo}) | ${p.qtd}</small></li>`).join('');
+    } else lista.style.display = 'none';
+};
+window.selecionarProdutoContagem = (id) => {
+    const p = state.produtos.find(x => x.id == id);
+    if(p) {
+        state.produtoContagemSelecionado = p; $('input-busca-contagem').value = p.nome;
+        $('lista-sugestoes-contagem').style.display = 'none';
+        $('input-qtd-contagem').disabled = false; $('btn-add-contagem').disabled = false; $('input-qtd-contagem').focus();
+    }
+};
+$('btn-add-contagem').onclick = () => {
+    if(!state.produtoContagemSelecionado) return;
+    const qtd = parseFloat($('input-qtd-contagem').value);
+    if(isNaN(qtd)) return alert("Informe a quantidade.");
+    const p = state.produtoContagemSelecionado;
+    const diff = qtd - p.qtd;
+    const cor = diff > 0 ? 'green' : (diff < 0 ? 'red' : 'gray'); const sinal = diff > 0 ? '+' : '';
+    $('msg-vazio-contagem').style.display = 'none';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${p.nome}</td><td>${p.qtd}</td><td style="font-weight:bold;background:#fff3cd;">${qtd}</td><td style="color:${cor};font-weight:bold;">${sinal}${diff}</td><td><span class="material-icons" style="color:red;cursor:pointer;" onclick="removerItemContagem(this, '${p.id}')">delete</span></td>`;
+    $('lista-contagem-corpo').appendChild(tr);
+    state.itensContagem.push({ id: p.id, novaQtd: qtd });
+    $('input-busca-contagem').value = ''; $('input-qtd-contagem').value = ''; $('input-qtd-contagem').disabled = true;
+    $('btn-add-contagem').disabled = true; state.produtoContagemSelecionado = null; $('input-busca-contagem').focus();
+};
+window.removerItemContagem = (btn, id) => {
+    btn.closest('tr').remove(); state.itensContagem = state.itensContagem.filter(i => i.id != id);
+    if(state.itensContagem.length === 0) $('msg-vazio-contagem').style.display = 'block';
+};
+$('btnSalvarContagem').onclick = async () => {
+    if(state.itensContagem.length === 0) return alert("Vazio.");
+    const btn = $('btnSalvarContagem'); btn.disabled = true; btn.innerText = "Processando...";
+    try { await Backend.atualizarEstoqueBatch(state.itensContagem); alert("Sucesso!"); closeModal('modal-contagem'); navegar('produtos'); } 
+    catch(e) { alert(e.message); }
+    btn.disabled = false; btn.innerText = "Concluir";
+};
+
+// --- FINANCEIRO MANUAL ---
 $('btnNovaDespesa').onclick = () => { $('form-financeiro-manual').reset(); $('modal-nova-despesa').style.display = 'block'; };
 $('opt-despesa').onclick = () => { state.tipoFinanceiro='Despesa'; $('opt-despesa').classList.add('selected'); $('opt-receita').classList.remove('selected'); };
 $('opt-receita').onclick = () => { state.tipoFinanceiro='Receita'; $('opt-receita').classList.add('selected'); $('opt-despesa').classList.remove('selected'); };
@@ -244,7 +459,6 @@ $('btn-salvar-fin-manual').onclick = async (e) => {
         fornecedor: $('fin_man_fornecedor').value, data_emissao: $('fin_man_emissao').value,
         data_vencimento: $('fin_man_vencimento').value, status: $('fin_man_status').value
     };
-    // Se parcelado, cria loop. Simplificado aqui para 1 registro:
     await Backend.salvarFinanceiro(dados);
     closeModal('modal-nova-despesa'); navegar('financeiro');
 };
@@ -263,20 +477,43 @@ $('btn-processar-xml').onclick = () => {
         const xNome = xml.getElementsByTagName("xNome")[0]?.textContent;
         const vNF = xml.getElementsByTagName("vNF")[0]?.textContent;
         
+        const itensXML = [];
+        const dets = xml.getElementsByTagName("det");
+        for(let i=0; i<dets.length; i++) {
+            const prod = dets[i].getElementsByTagName("prod")[0];
+            if(prod) {
+                itensXML.push({
+                    codigo: prod.getElementsByTagName("cProd")[0]?.textContent,
+                    nome: prod.getElementsByTagName("xProd")[0]?.textContent,
+                    qtd: parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent),
+                    preco: parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent)
+                });
+            }
+        }
+        
         if(nNF) {
-            await Backend.salvarNota({ numero: nNF, fornecedor: xNome, valor: parseFloat(vNF), tipo: 'XML Importado', data: new Date() });
-            alert(`Nota ${nNF} importada!`);
+            const notaXML = { 
+                numero: nNF, fornecedor: xNome, valor: parseFloat(vNF), tipo: 'XML Importado', data: new Date(),
+                qtd_itens: itensXML.length, itens_json: itensXML
+            };
+            
+            await Backend.salvarNota(notaXML);
+
+            // **ATUALIZA ESTOQUE DO XML**
+            await Backend.processarEntradaEstoque(itensXML);
+            
+            alert(`Nota ${nNF} importada e estoque atualizado!`);
             closeModal('modal-importar-xml'); navegar('notas_entrada');
+            abrirPerguntaFinanceiro(notaXML);
         } else alert('XML inválido');
     };
     reader.readAsText(file);
 };
 
-// --- PDF ---
-$('btnPDFProdutos').onclick = () => html2pdf().from($('tabela-produtos-corpo').parentElement).save('estoque.pdf');
-$('btnPDFFinanceiro').onclick = () => html2pdf().from($('tabela-financeiro-corpo').parentElement).save('financeiro.pdf');
+// --- PDF & USUARIOS ---
+$('btnPDFProdutos').onclick = () => html2pdf().set({ margin: 10, filename: 'estoque.pdf' }).from($('tabela-produtos-corpo').parentElement).save();
+$('btnPDFFinanceiro').onclick = () => html2pdf().set({ margin: 10, filename: 'financeiro.pdf' }).from($('tabela-financeiro-corpo').parentElement).save();
 
-// --- USUARIOS ---
 $('btnNovoUsuario').onclick = () => { $('form-usuario').reset(); $('usuario_id_edit').value=''; $('modal-usuario').style.display='block'; };
 $('btn-salvar-usuario').onclick = async (e) => {
     e.preventDefault();
@@ -285,7 +522,7 @@ $('btn-salvar-usuario').onclick = async (e) => {
 };
 window.delUser = async (id) => { if(confirm('Excluir?')) { await Backend.excluirUsuario(id); navegar('usuarios'); } };
 window.editUser = (id) => {
-    const u = state.usuarios.find(x => x.id === id);
+    const u = state.usuarios.find(x => x.id == id);
     if(!u) return;
     $('usuario_id_edit').value = u.id; $('user_nome').value = u.nome; $('user_login').value = u.usuario; $('user_senha').value = u.senha; $('user_perfil').value = u.perfil;
     $('modal-usuario').style.display = 'block';
@@ -296,44 +533,30 @@ $('btnAddGrupo').onclick = async () => {
     const g = $('novo-grupo-nome').value;
     if(g && !state.grupos.includes(g)) { state.grupos.push(g); await Backend.saveGrupos(state.grupos); navegar('configuracoes'); }
 };
-window.delGrupo = async (g) => {
-    state.grupos = state.grupos.filter(x => x !== g); await Backend.saveGrupos(state.grupos); navegar('configuracoes');
-};
+window.delGrupo = async (g) => { state.grupos = state.grupos.filter(x => x !== g); await Backend.saveGrupos(state.grupos); navegar('configuracoes'); };
 async function updateGrupoSelects() {
     const grps = await Backend.getGrupos();
     const opts = grps.map(g => `<option value="${g}">${g}</option>`).join('');
-    $('prod_grupo').innerHTML = '<option value="">Selecione...</option>' + opts;
-    $('filtro-grupo').innerHTML = '<option value="">Todos</option>' + opts;
+    $('prod_grupo').innerHTML = '<option value="">Selecione...</option>' + opts; $('filtro-grupo').innerHTML = '<option value="">Todos</option>' + opts;
 }
 
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Verificar login
     const sess = localStorage.getItem('sess_gestao');
     if(sess) { state.user = JSON.parse(sess); initApp(); }
-
     $('btnLogin').onclick = async () => {
         const u = await Backend.login($('usuario').value, $('senha').value);
         if(u) { state.user = u; localStorage.setItem('sess_gestao', JSON.stringify(u)); initApp(); }
         else $('msg-erro').innerText = 'Erro login';
     };
-
     $('btnSair').onclick = () => { localStorage.removeItem('sess_gestao'); location.reload(); };
-
-    // Fechar modais
     document.querySelectorAll('.close').forEach(b => b.onclick = function() { this.closest('.modal').style.display='none'; });
-
-    // Navegação Sidebar
     document.querySelectorAll('.sidebar li').forEach(li => li.onclick = () => navegar(li.dataset.route));
-    
-    // Pesquisas
     $('barra-pesquisa').onkeyup = () => renderProdutos(state.produtos);
     $('barra-pesquisa-financeiro').onkeyup = () => renderFinanceiro(state.financeiro);
 });
 
 function initApp() {
-    $('tela-login').style.display = 'none';
-    $('tela-dashboard').style.display = 'flex';
-    $('display-nome-usuario').innerText = state.user.nome;
-    navegar('dashboard');
+    $('tela-login').style.display = 'none'; $('tela-dashboard').style.display = 'flex';
+    $('display-nome-usuario').innerText = state.user.nome; navegar('dashboard');
 }
