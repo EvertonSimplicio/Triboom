@@ -137,7 +137,8 @@ async function navegar(modulo) {
     const activeLi = document.querySelector(`[data-route="${modulo}"]`);
     if (activeLi) activeLi.classList.add('ativo');
 
-    ['view-padrao', 'view-usuarios', 'view-produtos', 'view-configuracoes', 'view-notas-entrada', 'view-financeiro'].forEach(v => $(v).style.display = 'none');
+    ['view-padrao', 'view-usuarios', 'view-funcionarios', 'view-fornecedores', 'view-produtos', 'view-configuracoes', 'view-notas-entrada', 'view-financeiro', 'view-relatorios']
+      .forEach(v => { const el = $(v); if(el) el.style.display = 'none'; });
     
     if(modulo === 'produtos') {
         $('view-produtos').style.display = 'block';
@@ -154,13 +155,210 @@ async function navegar(modulo) {
         $('view-notas-entrada').style.display = 'block';
         if(state.produtos.length === 0) await Backend.getProdutos();
         renderNotas(await Backend.getNotas());
+    } else if(modulo === 'funcionarios') {
+        const view = $('view-funcionarios');
+        if(view) view.style.display = 'block';
+    } else if(modulo === 'fornecedores') {
+        const view = $('view-fornecedores');
+        if(view) view.style.display = 'block';
     } else if(modulo === 'configuracoes') {
         $('view-configuracoes').style.display = 'block';
         renderGrupos(await Backend.getGrupos());
+    } else if(modulo === 'relatorios') {
+        const view = $('view-relatorios');
+        if(view) view.style.display = 'block';
+        await prepararRelatorios();
+        renderRelatorios();
+        aplicarFiltroRelatorioTipo();
     } else {
         $('view-padrao').style.display = 'block';
     }
 }
+
+/* ==========================================================================
+   RELATÓRIOS
+   ========================================================================== */
+function _toDate(value) {
+    if(!value) return null;
+    if(typeof value === 'string' && value.length === 10) return new Date(value + 'T00:00:00');
+    return new Date(value);
+}
+
+async function prepararRelatorios() {
+    // Garante dados carregados
+    if(state.produtos.length === 0) await Backend.getProdutos();
+    if(state.financeiro.length === 0) await Backend.getFinanceiro();
+    if(state.notas.length === 0) await Backend.getNotas();
+
+    const selMes = $('rel_mes');
+    const selAno = $('rel_ano');
+    if(!selMes || !selAno) return;
+
+    if(selMes.options.length === 0) {
+        const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        selMes.innerHTML = meses.map((m, idx) => `<option value="${idx+1}">${m}</option>`).join('');
+
+        const anoAtual = new Date().getFullYear();
+        const anos = [];
+        for(let a = anoAtual - 4; a <= anoAtual + 1; a++) anos.push(a);
+        selAno.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
+
+        selMes.value = String(new Date().getMonth() + 1);
+        selAno.value = String(anoAtual);
+    }
+}
+
+function renderRelatorios() {
+    const selMes = $('rel_mes');
+    const selAno = $('rel_ano');
+    const mes = parseInt(selMes?.value || (new Date().getMonth() + 1), 10);
+    const ano = parseInt(selAno?.value || new Date().getFullYear(), 10);
+    const inicio = new Date(ano, mes - 1, 1);
+    const fim = new Date(ano, mes, 1); // exclusivo
+
+    const finPeriodo = (state.financeiro || []).filter(f => {
+        const d = _toDate(f.data_vencimento);
+        return d && d >= inicio && d < fim;
+    });
+
+    const notasPeriodo = (state.notas || []).filter(n => {
+        const d = _toDate(n.data);
+        return d && d >= inicio && d < fim;
+    });
+
+    // Totais financeiro
+    let receitas = 0, despesas = 0;
+    finPeriodo.forEach(i => {
+        const v = parseFloat(i.valor || 0);
+        if(i.tipo === 'Receita') receitas += v; else despesas += v;
+    });
+
+    // Estoque
+    let qtdEstoque = 0, valorEstoque = 0;
+    (state.produtos || []).forEach(p => {
+        const q = parseFloat(p.qtd || 0);
+        const pr = parseFloat(p.preco || 0);
+        qtdEstoque += q;
+        valorEstoque += (q * pr);
+    });
+
+    if($('rel-receitas')) $('rel-receitas').innerText = money(receitas);
+    if($('rel-despesas')) $('rel-despesas').innerText = money(despesas);
+    if($('rel-saldo')) $('rel-saldo').innerText = money(receitas - despesas);
+    if($('rel-estoque-qtd')) $('rel-estoque-qtd').innerText = String(qtdEstoque);
+    if($('rel-estoque-valor')) $('rel-estoque-valor').innerText = money(valorEstoque);
+    if($('rel-notas')) $('rel-notas').innerText = String(notasPeriodo.length);
+
+    // Tabela financeiro
+    const corpoFin = $('rel-financeiro-corpo');
+    if(corpoFin) {
+        const linhas = finPeriodo
+            .sort((a,b) => (_toDate(b.data_vencimento) - _toDate(a.data_vencimento)))
+            .slice(0, 200)
+            .map(i => {
+                const cor = i.tipo === 'Receita' ? '#27ae60' : '#e74c3c';
+                return `<tr>
+                  <td>${safeDate(i.data_vencimento)}</td>
+                  <td>${i.descricao || ''}<br><small>${i.fornecedor || ''}</small></td>
+                  <td><span style="color:${cor}">${i.tipo}</span></td>
+                  <td style="color:${cor}"><b>${money(i.valor)}</b></td>
+                  <td>${i.status || ''}</td>
+                </tr>`;
+            }).join('');
+
+        corpoFin.innerHTML = linhas || `<tr><td colspan="5" style="text-align:center; color:#999;">Nenhum lançamento no período</td></tr>`;
+    }
+
+    // Tabela notas
+    const corpoNotas = $('rel-notas-corpo');
+    if(corpoNotas) {
+        const linhas = notasPeriodo
+            .sort((a,b) => (_toDate(b.data) - _toDate(a.data)))
+            .slice(0, 200)
+            .map(n => `<tr>
+              <td>${safeDate(n.data)}</td>
+              <td>${n.numero || '-'}</td>
+              <td>${n.fornecedor || '-'}</td>
+              <td>${n.qtd_itens || 0}</td>
+              <td style="color:#27ae60"><b>${money(n.valor)}</b></td>
+              <td><small>${n.tipo || 'Manual'}</small></td>
+            </tr>`).join('');
+
+        corpoNotas.innerHTML = linhas || `<tr><td colspan="6" style="text-align:center; color:#999;">Nenhuma nota no período</td></tr>`;
+    }
+
+    // Baixo estoque
+    const corpoBaixo = $('rel-baixo-estoque-corpo');
+    if(corpoBaixo) {
+        const low = (state.produtos || [])
+            .slice()
+            .sort((a,b) => parseFloat(a.qtd || 0) - parseFloat(b.qtd || 0))
+            .slice(0, 15);
+
+        corpoBaixo.innerHTML = low.map(p => `<tr>
+          <td><b>${p.codigo}</b></td>
+          <td>${p.nome}</td>
+          <td>${p.grupo || '-'}</td>
+          <td><b>${p.qtd}</b></td>
+        </tr>`).join('') || `<tr><td colspan="4" style="text-align:center; color:#999;">Sem produtos</td></tr>`;
+    }
+}
+
+function aplicarFiltroRelatorioTipo() {
+    const tipo = ($('rel_tipo')?.value || 'todos').toLowerCase();
+
+    const secResumo = $('rel-sec-resumo');
+    const cardsFin = $('rel-cards-fin');
+    const cardsEst = $('rel-cards-estoque');
+
+    const secFin = $('rel-sec-financeiro');
+    const secNotas = $('rel-sec-notas');
+    const secBaixo = $('rel-sec-baixo-estoque');
+
+    const show = (el, yes) => { if(el) el.style.display = yes ? 'block' : 'none'; };
+
+    // padrão: tudo visível
+    show(secResumo, true);
+    show(cardsFin, true);
+    show(cardsEst, true);
+    show(secFin, true);
+    show(secNotas, true);
+    show(secBaixo, true);
+
+    if(tipo === 'todos') return;
+
+    if(tipo === 'resumo') {
+        show(secFin, false);
+        show(secNotas, false);
+        show(secBaixo, false);
+        return;
+    }
+
+    if(tipo === 'financeiro') {
+        show(cardsEst, false);
+        show(secNotas, false);
+        show(secBaixo, false);
+        show(secFin, true);
+        return;
+    }
+
+    if(tipo === 'notas') {
+        show(cardsFin, false);
+        show(secFin, false);
+        show(secBaixo, false);
+        show(secNotas, true);
+        return;
+    }
+
+    if(tipo === 'estoque') {
+        show(cardsFin, false);
+        show(secFin, false);
+        show(secNotas, false);
+        show(secBaixo, true);
+        return;
+    }
+}
+
 
 // ==========================================================================
 // RENDERIZAÇÃO
@@ -584,6 +782,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.sidebar li').forEach(li => li.onclick = () => navegar(li.dataset.route));
     $('barra-pesquisa').onkeyup = () => renderProdutos(state.produtos);
     $('barra-pesquisa-financeiro').onkeyup = () => renderFinanceiro(state.financeiro);
+
+    // --- RELATÓRIOS ---
+    if($('btnGerarRelatorio')) $('btnGerarRelatorio').onclick = async () => { await prepararRelatorios(); renderRelatorios(); aplicarFiltroRelatorioTipo(); };
+    if($('rel_mes')) $('rel_mes').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
+    if($('rel_ano')) $('rel_ano').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
+    if($('rel_tipo')) $('rel_tipo').onchange = () => aplicarFiltroRelatorioTipo();
+    if($('btnPDFRelatorio')) $('btnPDFRelatorio').onclick = () => {
+        const area = $('relatorio-area');
+        if(!area) return;
+        const mes = $('rel_mes')?.value || String(new Date().getMonth() + 1);
+        const ano = $('rel_ano')?.value || String(new Date().getFullYear());
+        html2pdf().set({ margin: 10, filename: `relatorio_${mes}-${ano}.pdf` }).from(area).save();
+    };
 });
 
 function initApp() { $('tela-login').style.display = 'none'; $('tela-dashboard').style.display = 'flex'; $('display-nome-usuario').innerText = state.user.nome; navegar('dashboard'); }
