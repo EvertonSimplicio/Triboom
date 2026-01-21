@@ -6,31 +6,7 @@
 const _db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = (id) => document.getElementById(id);
-function escapeHtml(str) {
-    return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
 const toast = (msg) => alert(msg);
-function parseBRNumber(v){
-    if(v === null || v === undefined) return 0;
-    if(typeof v === 'number') return v;
-    const s = String(v).trim();
-    if(!s) return 0;
-    // remove currency and spaces
-    const cleaned = s.replace(/[^0-9,.-]/g,'');
-    // if has comma and dot, assume dot thousand and comma decimal
-    if(cleaned.includes(',') && cleaned.includes('.')){
-        return parseFloat(cleaned.replace(/\./g,'').replace(',','.')) || 0;
-    }
-    // if only comma, decimal
-    if(cleaned.includes(',')) return parseFloat(cleaned.replace(',','.')) || 0;
-    return parseFloat(cleaned) || 0;
-}
-
 const money = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /* ==========================================================================
@@ -42,9 +18,9 @@ let state = {
     financeiro: [],
     notas: [],
     usuarios: [],
-    funcionarios: [],
-    fornecedores: [],
     grupos: [],
+    fornecedores: [],
+    funcionarios: [],
     route: 'dashboard',
     tipoFinanceiro: 'Despesa',
     
@@ -116,7 +92,7 @@ const Backend = {
         return true;
     },
     async getNotas() {
-        const { data, error } = await _db.from('notas_entrada').select('*').order('created_at', { ascending: false }).order('data', { ascending: false });
+        const { data, error } = await _db.from('notas_entrada').select('*').order('created_at', { ascending: false });
         if(error) console.error("Erro notas:", error);
         state.notas = data || [];
         return state.notas;
@@ -140,50 +116,6 @@ const Backend = {
     async excluirUsuario(id) {
         return await _db.from('usuarios').delete().eq('id', id);
     },
-    async getFuncionarios() {
-        const { data, error } = await _db.from('funcionarios')
-            .select('*')
-            .order('nome', { ascending: true });
-        if(error) console.error("Erro funcionarios:", error);
-        state.funcionarios = data || [];
-        return state.funcionarios;
-    },
-    async salvarFuncionario(payload) {
-        const { data, error } = await _db.from('funcionarios')
-            .upsert(payload)
-            .select()
-            .maybeSingle();
-        if(error) console.error("Erro salvar funcionario:", error);
-        return data;
-    },
-    async excluirFuncionario(id) {
-        const { error } = await _db.from('funcionarios').delete().eq('id', id);
-        if(error) console.error("Erro excluir funcionario:", error);
-        return !error;
-    },
-
-    async getFornecedores() {
-        const { data, error } = await _db.from('fornecedores')
-            .select('*')
-            .order('nome', { ascending: true });
-        if(error) console.error("Erro fornecedores:", error);
-        state.fornecedores = data || [];
-        return state.fornecedores;
-    },
-    async salvarFornecedor(payload) {
-        const { data, error } = await _db.from('fornecedores')
-            .upsert(payload)
-            .select()
-            .maybeSingle();
-        if(error) console.error("Erro salvar fornecedor:", error);
-        return data;
-    },
-    async excluirFornecedor(id) {
-        const { error } = await _db.from('fornecedores').delete().eq('id', id);
-        if(error) console.error("Erro excluir fornecedor:", error);
-        return !error;
-    },
-
     async getGrupos() {
         const { data } = await _db.from('ajustes').select('config_json').limit(1).maybeSingle();
         state.grupos = data?.config_json?.grupos || [];
@@ -194,6 +126,40 @@ const Backend = {
         if(data) await _db.from('ajustes').update({config_json: {grupos}}).eq('id', data.id);
         else await _db.from('ajustes').insert([{config_json: {grupos}}]);
     }
+    // --- FORNECEDORES ---
+    async getFornecedores(includeInativos = false) {
+        let q = _db.from('fornecedores').select('*').order('nome');
+        if(!includeInativos) q = q.eq('ativo', true);
+        const { data, error } = await q;
+        if(error) console.error("Erro fornecedores:", error);
+        state.fornecedores = data || [];
+        return state.fornecedores;
+    },
+    async salvarFornecedor(f) {
+        if (f.id) return await _db.from('fornecedores').update(f).eq('id', f.id);
+        return await _db.from('fornecedores').insert([f]);
+    },
+    async excluirFornecedor(id) {
+        return await _db.from('fornecedores').delete().eq('id', id);
+    },
+
+    // --- FUNCIONÁRIOS ---
+    async getFuncionarios(includeInativos = false) {
+        let q = _db.from('funcionarios').select('*').order('nome');
+        if(!includeInativos) q = q.eq('ativo', true);
+        const { data, error } = await q;
+        if(error) console.error("Erro funcionarios:", error);
+        state.funcionarios = data || [];
+        return state.funcionarios;
+    },
+    async salvarFuncionario(f) {
+        if (f.id) return await _db.from('funcionarios').update(f).eq('id', f.id);
+        return await _db.from('funcionarios').insert([f]);
+    },
+    async excluirFuncionario(id) {
+        return await _db.from('funcionarios').delete().eq('id', id);
+    },
+
 };
 
 /* ==========================================================================
@@ -207,8 +173,7 @@ async function navegar(modulo) {
     const activeLi = document.querySelector(`[data-route="${modulo}"]`);
     if (activeLi) activeLi.classList.add('ativo');
 
-    ['view-padrao', 'view-usuarios', 'view-funcionarios', 'view-fornecedores', 'view-produtos', 'view-configuracoes', 'view-notas-entrada', 'view-financeiro', 'view-relatorios']
-      .forEach(v => { const el = $(v); if(el) el.style.display = 'none'; });
+    ['view-padrao','view-produtos','view-notas-entrada','view-financeiro','view-relatorios','view-funcionarios','view-fornecedores','view-usuarios','view-configuracoes'].forEach(v => $(v).style.display = 'none');
     
     if(modulo === 'produtos') {
         $('view-produtos').style.display = 'block';
@@ -217,346 +182,37 @@ async function navegar(modulo) {
     } else if(modulo === 'financeiro') {
         $('view-financeiro').style.display = 'block';
         injetarControlesFinanceiros();
+        await Backend.getFornecedores(false);
+        atualizarSelectFornecedores();
         renderFinanceiro(await Backend.getFinanceiro());
+    } else if(modulo === 'relatorios') {
+        $('view-relatorios').style.display = 'block';
+        await prepararRelatorios();
+        renderRelatorios();
+    } else if(modulo === 'funcionarios') {
+        $('view-funcionarios').style.display = 'block';
+        renderFuncionarios(await Backend.getFuncionarios(true));
+    } else if(modulo === 'fornecedores') {
+        $('view-fornecedores').style.display = 'block';
+        await Backend.getFornecedores(true);
+        renderFornecedores(state.fornecedores);
+        atualizarSelectFornecedores();
     } else if(modulo === 'usuarios') {
         $('view-usuarios').style.display = 'block';
         renderUsuarios(await Backend.getUsuarios());
     } else if(modulo === 'notas_entrada') {
         $('view-notas-entrada').style.display = 'block';
         if(state.produtos.length === 0) await Backend.getProdutos();
-        const _notas = await Backend.getNotas();
-        _notas.sort((a,b) => (_toDate(b.created_at || b.data) - _toDate(a.created_at || a.data)));
-        renderNotas(_notas);
-    } else if(modulo === 'funcionarios') {
-        const view = $('view-funcionarios');
-        if(view) view.style.display = 'block';
-        renderFuncionarios(await Backend.getFuncionarios());
-    } else if(modulo === 'fornecedores') {
-        const view = $('view-fornecedores');
-        if(view) view.style.display = 'block';
-        renderFornecedores(await Backend.getFornecedores());
-    }
-else if(modulo === 'configuracoes') {
+        await Backend.getFornecedores(false);
+        atualizarSelectFornecedores();
+        renderNotas(await Backend.getNotas());
+    } else if(modulo === 'configuracoes') {
         $('view-configuracoes').style.display = 'block';
         renderGrupos(await Backend.getGrupos());
-    } else if(modulo === 'relatorios') {
-        const view = $('view-relatorios');
-        if(view) view.style.display = 'block';
-        await prepararRelatorios();
-        renderRelatorios();
-        aplicarFiltroRelatorioTipo();
     } else {
         $('view-padrao').style.display = 'block';
     }
 }
-
-/* ==========================================================================
-   RELATÓRIOS
-   ========================================================================== */
-let chartDespStatus = null;
-let chartDespFornecedor = null;
-
-/* ========================================================================== 
-   RELATÓRIOS
-   ========================================================================== */
-function _toDate(value) {
-    if(!value) return null;
-    if(typeof value === 'string' && value.length === 10) return new Date(value + 'T00:00:00');
-    return new Date(value);
-}
-
-async function prepararRelatorios() {
-    // Garante dados carregados
-    if(state.produtos.length === 0) await Backend.getProdutos();
-    if(state.financeiro.length === 0) await Backend.getFinanceiro();
-    if(state.notas.length === 0) await Backend.getNotas();
-
-    const selMes = $('rel_mes');
-    const selAno = $('rel_ano');
-    if(!selMes || !selAno) return;
-
-    if(selMes.options.length === 0) {
-        const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-        selMes.innerHTML = meses.map((m, idx) => `<option value="${idx+1}">${m}</option>`).join('');
-
-        const anoAtual = new Date().getFullYear();
-        const anos = [];
-        for(let a = anoAtual - 4; a <= anoAtual + 1; a++) anos.push(a);
-        selAno.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
-
-        selMes.value = String(new Date().getMonth() + 1);
-        selAno.value = String(anoAtual);
-    }
-    // Popula filtro de fornecedor (com base no financeiro)
-    const selForn = $('rel_fornecedor');
-    if(selForn) {
-        const atual = selForn.value || 'todos';
-        const fornecedores = Array.from(new Set((state.financeiro || [])
-            .map(i => (i.fornecedor || '').trim())
-            .filter(Boolean)))
-            .sort((a,b) => a.localeCompare(b, 'pt-BR', { sensitivity:'base' }));
-
-        selForn.innerHTML = `<option value="todos">Todos Fornecedores</option>` + fornecedores.map(f => 
-            `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`
-        ).join('');
-
-        if(fornecedores.includes(atual)) selForn.value = atual;
-        else selForn.value = 'todos';
-    }
-
-}
-
-
-function renderRelatorios() {
-    const selMes = $('rel_mes');
-    const selAno = $('rel_ano');
-    const mes = parseInt(selMes?.value || (new Date().getMonth() + 1), 10);
-    const ano = parseInt(selAno?.value || new Date().getFullYear(), 10);
-    const inicio = new Date(ano, mes - 1, 1);
-    const fim = new Date(ano, mes, 1); // exclusivo
-
-    const finPeriodo = (state.financeiro || []).filter(f => {
-        const d = _toDate(f.data_vencimento);
-        return d && d >= inicio && d < fim;
-    });
-
-    const notasPeriodo = (state.notas || []).filter(n => {
-        const d = _toDate(n.data);
-        return d && d >= inicio && d < fim;
-    });
-
-
-    // Filtros do Relatório
-    const filtroStatus = ($('rel_status')?.value || 'todos');
-    const filtroFornecedor = ($('rel_fornecedor')?.value || 'todos');
-
-    let finFiltrado = finPeriodo.slice();
-    if (filtroStatus !== 'todos') {
-        finFiltrado = finFiltrado.filter(i => (i.status || '').toLowerCase() === filtroStatus.toLowerCase());
-    }
-    if (filtroFornecedor !== 'todos') {
-        finFiltrado = finFiltrado.filter(i => (i.fornecedor || '') === filtroFornecedor);
-    }
-
-    let notasFiltradas = notasPeriodo.slice();
-    if (filtroFornecedor !== 'todos') {
-        notasFiltradas = notasFiltradas.filter(n => (n.fornecedor || '') === filtroFornecedor);
-    }
-
-    // Totais financeiro
-    let receitas = 0, despesas = 0;
-    finFiltrado.forEach(i => {
-        const v = parseFloat(i.valor || 0);
-        if(i.tipo === 'Receita') receitas += v; else despesas += v;
-    });
-
-    // Estoque
-    let qtdEstoque = 0, valorEstoque = 0;
-    (state.produtos || []).forEach(p => {
-        const q = parseFloat(p.qtd || 0);
-        const pr = parseFloat(p.preco || 0);
-        qtdEstoque += q;
-        valorEstoque += (q * pr);
-    });
-
-    if($('rel-receitas')) $('rel-receitas').innerText = money(receitas);
-    if($('rel-despesas')) $('rel-despesas').innerText = money(despesas);
-    if($('rel-saldo')) $('rel-saldo').innerText = money(receitas - despesas);
-    if($('rel-estoque-qtd')) $('rel-estoque-qtd').innerText = String(qtdEstoque);
-    if($('rel-estoque-valor')) $('rel-estoque-valor').innerText = money(valorEstoque);
-    if($('rel-notas')) $('rel-notas').innerText = String(notasFiltradas.length);
-
-    // Gráficos (Despesas)
-    renderGraficosDespesas(finFiltrado);
-
-
-    // Tabela financeiro
-    const corpoFin = $('rel-financeiro-corpo');
-    if(corpoFin) {
-        const linhas = finFiltrado
-            .sort((a,b) => (_toDate(b.data_vencimento) - _toDate(a.data_vencimento)))
-            .slice(0, 200)
-            .map(i => {
-                const cor = i.tipo === 'Receita' ? '#27ae60' : '#e74c3c';
-                return `<tr>
-                  <td>${safeDate(i.data_vencimento)}</td>
-                  <td>${i.descricao || ''}<br><small>${i.fornecedor || ''}</small></td>
-                  <td><span style="color:${cor}">${i.tipo}</span></td>
-                  <td style="color:${cor}"><b>${money(i.valor)}</b></td>
-                  <td>${i.status || ''}</td>
-                </tr>`;
-            }).join('');
-
-        corpoFin.innerHTML = linhas || `<tr><td colspan="5" style="text-align:center; color:#999;">Nenhum lançamento no período</td></tr>`;
-    }
-
-    // Tabela notas
-    const corpoNotas = $('rel-notas-corpo');
-    if(corpoNotas) {
-        const linhas = notasFiltradas
-            .sort((a,b) => (_toDate(b.data) - _toDate(a.data)))
-            .slice(0, 200)
-            .map(n => `<tr>
-              <td>${safeDate(n.data)}</td>
-              <td>${n.numero || '-'}</td>
-              <td>${n.fornecedor || '-'}</td>
-              <td>${n.qtd_itens || 0}</td>
-              <td style="color:#27ae60"><b>${money(n.valor)}</b></td>
-              <td><small>${n.tipo || 'Manual'}</small></td>
-            </tr>`).join('');
-
-        corpoNotas.innerHTML = linhas || `<tr><td colspan="6" style="text-align:center; color:#999;">Nenhuma nota no período</td></tr>`;
-    }
-
-    // Baixo estoque
-    const corpoBaixo = $('rel-baixo-estoque-corpo');
-    if(corpoBaixo) {
-        const low = (state.produtos || [])
-            .slice()
-            .sort((a,b) => parseFloat(a.qtd || 0) - parseFloat(b.qtd || 0))
-            .slice(0, 15);
-
-        corpoBaixo.innerHTML = low.map(p => `<tr>
-          <td><b>${p.codigo}</b></td>
-          <td>${p.nome}</td>
-          <td>${p.grupo || '-'}</td>
-          <td><b>${p.qtd}</b></td>
-        </tr>`).join('') || `<tr><td colspan="4" style="text-align:center; color:#999;">Sem produtos</td></tr>`;
-    }
-}
-
-
-function renderGraficosDespesas(listaFinanceiroFiltrada) {
-    try {
-        if(typeof Chart === 'undefined') return;
-
-        const lista = Array.isArray(listaFinanceiroFiltrada) ? listaFinanceiroFiltrada : [];
-        const despesas = lista.filter(i => (i.tipo || '').toLowerCase() === 'despesa');
-
-        // Despesas por Status (Pago x Pendente)
-        let pago = 0, pendente = 0, outros = 0;
-        despesas.forEach(i => {
-            const v = parseFloat(i.valor || 0) || 0;
-            const st = (i.status || '').toLowerCase();
-            if(st === 'pago') pago += v;
-            else if(st === 'pendente') pendente += v;
-            else outros += v;
-        });
-
-        const ctx1 = $('chart-desp-status')?.getContext?.('2d');
-        if(ctx1) {
-            if(chartDespStatus) chartDespStatus.destroy();
-            chartDespStatus = new Chart(ctx1, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Pago', 'Pendente', 'Outros'],
-                    datasets: [{
-                        data: [pago, pendente, outros]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom' } }
-                }
-            });
-        }
-
-        // Despesas por Fornecedor (Top 10)
-        const mapa = {};
-        despesas.forEach(i => {
-            const forn = (i.fornecedor || 'Sem fornecedor').trim() || 'Sem fornecedor';
-            const v = parseFloat(i.valor || 0) || 0;
-            mapa[forn] = (mapa[forn] || 0) + v;
-        });
-
-        const pares = Object.entries(mapa).sort((a,b) => b[1]-a[1]).slice(0, 10);
-        const labels = pares.map(p => p[0]);
-        const valores = pares.map(p => p[1]);
-
-        const ctx2 = $('chart-desp-forn')?.getContext?.('2d');
-        if(ctx2) {
-            if(chartDespFornecedor) chartDespFornecedor.destroy();
-            chartDespFornecedor = new Chart(ctx2, {
-                type: 'bar',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Total (R$)',
-                        data: valores
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { ticks: { callback: (val) => money(val) } }
-                    }
-                }
-            });
-        }
-    } catch(e) {
-        console.warn('Erro ao gerar gráficos:', e);
-    }
-}
-
-function aplicarFiltroRelatorioTipo() {
-    const tipo = ($('rel_tipo')?.value || 'todos').toLowerCase();
-
-    const secResumo = $('rel-sec-resumo');
-    const secGraficos = $('rel-sec-graficos');
-    const cardsEst = $('rel-cards-estoque');
-
-    const secFin = $('rel-sec-financeiro');
-    const secNotas = $('rel-sec-notas');
-    const secBaixo = $('rel-sec-baixo-estoque');
-
-    const show = (el, yes) => { if(el) el.style.display = yes ? 'block' : 'none'; };
-
-    // padrão: tudo visível
-    show(secResumo, true);
-    show(secGraficos, true);
-    show(cardsEst, true);
-    show(secFin, true);
-    show(secNotas, true);
-    show(secBaixo, true);
-
-    if(tipo === 'todos') return;
-
-    if(tipo === 'resumo') {
-        show(secFin, false);
-        show(secNotas, false);
-        show(secBaixo, false);
-        return;
-    }
-
-    if(tipo === 'financeiro') {
-        show(secResumo, false);
-        show(secGraficos, false);
-        show(cardsEst, false);
-        show(secNotas, false);
-        show(secBaixo, false);
-        return;
-    }
-
-    if(tipo === 'notas') {
-        show(secGraficos, false);
-        show(secFin, false);
-        show(secBaixo, false);
-        return;
-    }
-
-    if(tipo === 'estoque') {
-        show(secResumo, false);
-        show(secGraficos, false);
-        show(secFin, false);
-        show(secNotas, false);
-        show(secBaixo, true);
-        return;
-    }
-}
-
 
 // ==========================================================================
 // RENDERIZAÇÃO
@@ -666,209 +322,377 @@ async function realizarBaixaEmLote() {
 function renderUsuarios(lista) {
     $('tabela-usuarios-corpo').innerHTML = lista.map(u => `<tr><td>${u.nome}</td><td>${u.usuario}</td><td>${u.perfil}</td><td><span class="material-icons" onclick="editUser('${u.id}')" style="cursor:pointer">edit</span><span class="material-icons" style="color:red; cursor:pointer" onclick="delUser('${u.id}')">delete</span></td></tr>`).join('');
 }
-/* ==========================================================================
-   FUNCIONÁRIOS
-   ========================================================================== */
-function filtrarFuncionariosLista(lista) {
-    const q = ($('func_busca')?.value || '').toLowerCase().trim();
-    const st = $('func_status')?.value || 'todos';
-    return (lista || []).filter(f => {
-        const ativo = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
-        if(st === 'ativos' && !ativo) return false;
-        if(st === 'inativos' && ativo) return false;
-        if(!q) return true;
-        const blob = `${f.nome||''} ${f.cargo||''} ${f.telefone||''} ${f.email||''}`.toLowerCase();
-        return blob.includes(q);
-    });
-}
-function renderFuncionarios(lista) {
-    const corpo = $('tabela-funcionarios-corpo');
-    if(!corpo) return;
-    const dados = filtrarFuncionariosLista(lista || state.funcionarios);
-    corpo.innerHTML = (dados.length ? dados : []).map(f => {
-        const ativo = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
-        const badge = ativo
-            ? `<span style="cursor:pointer; padding:4px 10px; border-radius:12px; background:#e8f7ee; color:#2e7d32; font-weight:600; font-size:12px;" onclick="toggleFuncionarioAtivo('${f.id}', false)">Ativo</span>`
-            : `<span style="cursor:pointer; padding:4px 10px; border-radius:12px; background:#fff3e0; color:#ef6c00; font-weight:600; font-size:12px;" onclick="toggleFuncionarioAtivo('${f.id}', true)">Inativo</span>`;
-        const contato = [f.telefone, f.email].filter(Boolean).join(' • ');
-        return `<tr>
-            <td><b>${escapeHtml(f.nome||'')}</b></td>
-            <td>${escapeHtml(f.cargo||'-')}</td>
-            <td>${escapeHtml(contato||'-')}</td>
-            <td>${money(f.salario||0)}</td>
-            <td>${f.data_admissao ? safeDate(f.data_admissao) : '-'}</td>
-            <td>${badge}</td>
-            <td>
-              <span class="material-icons" style="cursor:pointer" title="Editar" onclick="abrirFuncionario('${f.id}')">edit</span>
-              <span class="material-icons" style="cursor:pointer;color:#e74c3c" title="Excluir" onclick="excluirFuncionarioUI('${f.id}')">delete</span>
-            </td>
-        </tr>`;
-    }).join('') || `<tr><td colspan="7" style="text-align:center; color:#999;">Nenhum funcionário encontrado</td></tr>`;
-}
-function abrirFuncionario(id) {
-    const f = (state.funcionarios || []).find(x => String(x.id) === String(id));
-    if(!f) return;
-    $('func_titulo_modal').innerText = 'Editar Funcionário';
-    $('func_id').value = f.id || '';
-    $('func_nome').value = f.nome || '';
-    $('func_cargo').value = f.cargo || '';
-    $('func_telefone').value = f.telefone || '';
-    $('func_email').value = f.email || '';
-    $('func_salario').value = (f.salario ?? '') === '' ? '' : String(f.salario).replace('.', ',');
-    $('func_admissao').value = f.data_admissao || '';
-    $('func_obs').value = f.observacoes || '';
-    $('func_ativo').checked = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
-    $('modal-funcionario').style.display = 'block';
-}
-function novoFuncionario() {
-    $('func_titulo_modal').innerText = 'Novo Funcionário';
-    $('form-funcionario').reset();
-    $('func_id').value = '';
-    $('func_ativo').checked = true;
-    $('modal-funcionario').style.display = 'block';
-    setTimeout(() => $('func_nome')?.focus(), 1);
-}
-async function salvarFuncionarioUI(e) {
-    e.preventDefault();
-    const payload = {
-        id: $('func_id').value || undefined,
-        nome: $('func_nome').value.trim(),
-        cargo: $('func_cargo').value.trim() || null,
-        telefone: $('func_telefone').value.trim() || null,
-        email: $('func_email').value.trim() || null,
-        salario: parseBRNumber($('func_salario').value),
-        data_admissao: $('func_admissao').value || null,
-        observacoes: $('func_obs').value.trim() || null,
-        ativo: $('func_ativo').checked
-    };
-    if(!payload.nome) return toast('Informe o nome do funcionário.');
-    const saved = await Backend.salvarFuncionario(payload);
-    if(!saved) return toast('Não foi possível salvar. Verifique se a tabela "funcionarios" existe no Supabase.');
-    closeModal('modal-funcionario');
-    await Backend.getFuncionarios();
-    renderFuncionarios(state.funcionarios);
-    toast('Funcionário salvo!');
-}
-async function excluirFuncionarioUI(id) {
-    if(!confirm('Excluir este funcionário?')) return;
-    const ok = await Backend.excluirFuncionario(id);
-    if(!ok) return toast('Não foi possível excluir. Verifique o banco.');
-    await Backend.getFuncionarios();
-    renderFuncionarios(state.funcionarios);
-    toast('Funcionário excluído!');
-}
-async function toggleFuncionarioAtivo(id, novoStatus) {
-    const saved = await Backend.salvarFuncionario({ id, ativo: !!novoStatus });
-    if(!saved) return toast('Não foi possível atualizar status.');
-    await Backend.getFuncionarios();
-    renderFuncionarios(state.funcionarios);
-}
-
-/* ==========================================================================
-   FORNECEDORES
-   ========================================================================== */
-function filtrarFornecedoresLista(lista) {
-    const q = ($('for_busca')?.value || '').toLowerCase().trim();
-    const st = $('for_status')?.value || 'todos';
-    return (lista || []).filter(f => {
-        const ativo = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
-        if(st === 'ativos' && !ativo) return false;
-        if(st === 'inativos' && ativo) return false;
-        if(!q) return true;
-        const blob = `${f.nome||''} ${f.cnpj_cpf||''} ${f.telefone||''} ${f.email||''} ${f.cidade||''} ${f.uf||''}`.toLowerCase();
-        return blob.includes(q);
-    });
-}
-function renderFornecedores(lista) {
-    const corpo = $('tabela-fornecedores-corpo');
-    if(!corpo) return;
-    const dados = filtrarFornecedoresLista(lista || state.fornecedores);
-    corpo.innerHTML = (dados.length ? dados : []).map(f => {
-        const ativo = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
-        const badge = ativo
-            ? `<span style="cursor:pointer; padding:4px 10px; border-radius:12px; background:#e8f7ee; color:#2e7d32; font-weight:600; font-size:12px;" onclick="toggleFornecedorAtivo('${f.id}', false)">Ativo</span>`
-            : `<span style="cursor:pointer; padding:4px 10px; border-radius:12px; background:#fff3e0; color:#ef6c00; font-weight:600; font-size:12px;" onclick="toggleFornecedorAtivo('${f.id}', true)">Inativo</span>`;
-        const contato = [f.telefone, f.email].filter(Boolean).join(' • ');
-        const cidadeuf = [f.cidade, f.uf].filter(Boolean).join('/');
-        return `<tr>
-            <td><b>${escapeHtml(f.nome||'')}</b></td>
-            <td>${escapeHtml(f.cnpj_cpf||'-')}</td>
-            <td>${escapeHtml(contato||'-')}</td>
-            <td>${escapeHtml(cidadeuf||'-')}</td>
-            <td>${badge}</td>
-            <td>
-              <span class="material-icons" style="cursor:pointer" title="Editar" onclick="abrirFornecedor('${f.id}')">edit</span>
-              <span class="material-icons" style="cursor:pointer;color:#e74c3c" title="Excluir" onclick="excluirFornecedorUI('${f.id}')">delete</span>
-            </td>
-        </tr>`;
-    }).join('') || `<tr><td colspan="6" style="text-align:center; color:#999;">Nenhum fornecedor encontrado</td></tr>`;
-}
-function abrirFornecedor(id) {
-    const f = (state.fornecedores || []).find(x => String(x.id) === String(id));
-    if(!f) return;
-    $('for_titulo_modal').innerText = 'Editar Fornecedor';
-    $('for_id').value = f.id || '';
-    $('for_nome').value = f.nome || '';
-    $('for_cnpjcpf').value = f.cnpj_cpf || '';
-    $('for_telefone').value = f.telefone || '';
-    $('for_email').value = f.email || '';
-    $('for_cidade').value = f.cidade || '';
-    $('for_uf').value = f.uf || '';
-    $('for_endereco').value = f.endereco || '';
-    $('for_obs').value = f.observacoes || '';
-    $('for_ativo').checked = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
-    $('modal-fornecedor').style.display = 'block';
-}
-function novoFornecedor() {
-    $('for_titulo_modal').innerText = 'Novo Fornecedor';
-    $('form-fornecedor').reset();
-    $('for_id').value = '';
-    $('for_ativo').checked = true;
-    $('modal-fornecedor').style.display = 'block';
-    setTimeout(() => $('for_nome')?.focus(), 1);
-}
-async function salvarFornecedorUI(e) {
-    e.preventDefault();
-    const payload = {
-        id: $('for_id').value || undefined,
-        nome: $('for_nome').value.trim(),
-        cnpj_cpf: $('for_cnpjcpf').value.trim() || null,
-        telefone: $('for_telefone').value.trim() || null,
-        email: $('for_email').value.trim() || null,
-        cidade: $('for_cidade').value.trim() || null,
-        uf: $('for_uf').value.trim().toUpperCase() || null,
-        endereco: $('for_endereco').value.trim() || null,
-        observacoes: $('for_obs').value.trim() || null,
-        ativo: $('for_ativo').checked
-    };
-    if(!payload.nome) return toast('Informe o nome do fornecedor.');
-    const saved = await Backend.salvarFornecedor(payload);
-    if(!saved) return toast('Não foi possível salvar. Verifique se a tabela "fornecedores" existe no Supabase.');
-    closeModal('modal-fornecedor');
-    await Backend.getFornecedores();
-    renderFornecedores(state.fornecedores);
-    toast('Fornecedor salvo!');
-}
-async function excluirFornecedorUI(id) {
-    if(!confirm('Excluir este fornecedor?')) return;
-    const ok = await Backend.excluirFornecedor(id);
-    if(!ok) return toast('Não foi possível excluir. Verifique o banco.');
-    await Backend.getFornecedores();
-    renderFornecedores(state.fornecedores);
-    toast('Fornecedor excluído!');
-}
-async function toggleFornecedorAtivo(id, novoStatus) {
-    const saved = await Backend.salvarFornecedor({ id, ativo: !!novoStatus });
-    if(!saved) return toast('Não foi possível atualizar status.');
-    await Backend.getFornecedores();
-    renderFornecedores(state.fornecedores);
-}
-
 function renderGrupos(lista) { $('tabela-config-grupos').innerHTML = lista.map(g => `<tr><td>${g}</td><td><span class="material-icons" style="color:red; cursor:pointer" onclick="delGrupo('${g}')">delete</span></td></tr>`).join(''); }
 
 /* ==========================================================================
    MODAIS E ACTIONS
    ========================================================================== */
+
+/* ==========================================================================
+   FORNECEDORES (SELECTS) + FUNCIONÁRIOS + FORNECEDORES (CRUD)
+   ========================================================================== */
+function _norm(s){ return (s||'').toString().trim().toLowerCase(); }
+function _esc(s){ return (s||'').toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+function atualizarSelectFornecedores() {
+    const ativos = (state.fornecedores || []).filter(f => f.ativo !== false);
+    const opts = ativos.map(f => `<option value="${_esc(f.nome)}">${_esc(f.nome)}</option>`).join('');
+    ['nota_fornecedor','fin_man_fornecedor'].forEach(id => {
+        const sel = $(id);
+        if(!sel) return;
+        const atual = sel.value;
+        sel.innerHTML = `<option value="">Selecione...</option>` + opts;
+        if(atual) {
+            const existe = Array.from(sel.options).some(o => _norm(o.value) === _norm(atual));
+            if(existe) sel.value = atual;
+            else sel.insertAdjacentHTML('afterbegin', `<option value="${_esc(atual)}" selected>(Antigo) ${_esc(atual)}</option>`);
+        }
+    });
+
+    // filtro de fornecedor no relatório
+    const rf = $('rel_fornecedor');
+    if(rf) {
+        const atual = rf.value;
+        rf.innerHTML = `<option value="">Todos Fornecedores</option>` + opts;
+        if(atual) {
+            const existe = Array.from(rf.options).some(o => _norm(o.value) === _norm(atual));
+            if(existe) rf.value = atual;
+            else rf.insertAdjacentHTML('afterbegin', `<option value="${_esc(atual)}" selected>(Antigo) ${_esc(atual)}</option>`);
+        }
+    }
+}
+
+function abrirModalFornecedor(f = null) {
+    $('forn_id').value = f?.id || '';
+    $('forn_nome').value = f?.nome || '';
+    $('forn_cnpj').value = f?.cnpj_cpf || '';
+    $('forn_telefone').value = f?.telefone || '';
+    $('forn_email').value = f?.email || '';
+    $('forn_endereco').value = f?.endereco || '';
+    $('forn_cidade').value = f?.cidade || '';
+    $('forn_uf').value = f?.uf || '';
+    $('forn_obs').value = f?.observacoes || '';
+    $('forn_ativo').value = (f?.ativo === false) ? 'false' : 'true';
+    $('modal-fornecedor').style.display = 'block';
+    setTimeout(() => $('forn_nome').focus(), 80);
+}
+function abrirModalFuncionario(f = null) {
+    $('func_id').value = f?.id || '';
+    $('func_nome').value = f?.nome || '';
+    $('func_cargo').value = f?.cargo || '';
+    $('func_telefone').value = f?.telefone || '';
+    $('func_email').value = f?.email || '';
+    $('func_salario').value = (f?.salario ?? '');
+    $('func_admissao').value = f?.data_admissao || '';
+    $('func_obs').value = f?.observacoes || '';
+    $('func_ativo').value = (f?.ativo === false) ? 'false' : 'true';
+    $('modal-funcionario').style.display = 'block';
+    setTimeout(() => $('func_nome').focus(), 80);
+}
+
+function renderFornecedores(lista) {
+    const termo = _norm($('busca-fornecedores')?.value);
+    const filtroAtivo = $('filtro-fornecedores-ativo')?.value;
+    let arr = (lista || state.fornecedores || []).slice();
+
+    if(termo) arr = arr.filter(f => _norm(f.nome).includes(termo) || _norm(f.cnpj_cpf).includes(termo) || _norm(f.telefone).includes(termo));
+    if(filtroAtivo === 'true') arr = arr.filter(f => f.ativo !== false);
+    if(filtroAtivo === 'false') arr = arr.filter(f => f.ativo === false);
+
+    $('tabela-fornecedores-corpo').innerHTML = arr.map(f => `
+        <tr>
+            <td><b>${_esc(f.nome)}</b></td>
+            <td>${_esc(f.cnpj_cpf || '')}</td>
+            <td>${_esc((f.telefone||'') + (f.email ? ' / ' + f.email : ''))}</td>
+            <td>
+                <span class="tag ${f.ativo === false ? 'pendente' : 'pago'}" style="cursor:pointer" onclick="toggleFornecedor('${f.id}')">
+                    ${f.ativo === false ? 'Inativo' : 'Ativo'}
+                </span>
+            </td>
+            <td>
+                <span class="material-icons action-btn edit" onclick="editarFornecedor('${f.id}')">edit</span>
+                <span class="material-icons action-btn delete" onclick="excluirFornecedor('${f.id}')">delete</span>
+            </td>
+        </tr>
+    `).join('') || `<tr><td colspan="5" style="text-align:center;color:#999">Nenhum fornecedor</td></tr>`;
+}
+
+function renderFuncionarios(lista) {
+    const termo = _norm($('busca-funcionarios')?.value);
+    const filtroAtivo = $('filtro-funcionarios-ativo')?.value;
+    let arr = (lista || state.funcionarios || []).slice();
+
+    if(termo) arr = arr.filter(f => _norm(f.nome).includes(termo) || _norm(f.cargo).includes(termo) || _norm(f.telefone).includes(termo));
+    if(filtroAtivo === 'true') arr = arr.filter(f => f.ativo !== false);
+    if(filtroAtivo === 'false') arr = arr.filter(f => f.ativo === false);
+
+    $('tabela-funcionarios-corpo').innerHTML = arr.map(f => `
+        <tr>
+            <td><b>${_esc(f.nome)}</b></td>
+            <td>${_esc(f.cargo || '')}</td>
+            <td>${_esc((f.telefone||'') + (f.email ? ' / ' + f.email : ''))}</td>
+            <td>
+                <span class="tag ${f.ativo === false ? 'pendente' : 'pago'}" style="cursor:pointer" onclick="toggleFuncionario('${f.id}')">
+                    ${f.ativo === false ? 'Inativo' : 'Ativo'}
+                </span>
+            </td>
+            <td>
+                <span class="material-icons action-btn edit" onclick="editarFuncionario('${f.id}')">edit</span>
+                <span class="material-icons action-btn delete" onclick="excluirFuncionario('${f.id}')">delete</span>
+            </td>
+        </tr>
+    `).join('') || `<tr><td colspan="5" style="text-align:center;color:#999">Nenhum funcionário</td></tr>`;
+}
+
+window.editarFornecedor = (id) => { const f = (state.fornecedores||[]).find(x => x.id == id); abrirModalFornecedor(f); };
+window.editarFuncionario = (id) => { const f = (state.funcionarios||[]).find(x => x.id == id); abrirModalFuncionario(f); };
+
+window.toggleFornecedor = async (id) => {
+    const f = (state.fornecedores||[]).find(x => x.id == id);
+    if(!f) return;
+    await Backend.salvarFornecedor({ id, ativo: !(f.ativo !== false) ? true : false });
+    await Backend.getFornecedores(true);
+    renderFornecedores(state.fornecedores);
+    atualizarSelectFornecedores();
+};
+window.toggleFuncionario = async (id) => {
+    const f = (state.funcionarios||[]).find(x => x.id == id);
+    if(!f) return;
+    await Backend.salvarFuncionario({ id, ativo: !(f.ativo !== false) ? true : false });
+    state.funcionarios = await Backend.getFuncionarios(true);
+    renderFuncionarios(state.funcionarios);
+};
+
+window.excluirFornecedor = async (id) => {
+    if(!confirm('Excluir este fornecedor?')) return;
+    await Backend.excluirFornecedor(id);
+    await Backend.getFornecedores(true);
+    renderFornecedores(state.fornecedores);
+    atualizarSelectFornecedores();
+};
+window.excluirFuncionario = async (id) => {
+    if(!confirm('Excluir este funcionário?')) return;
+    await Backend.excluirFuncionario(id);
+    state.funcionarios = await Backend.getFuncionarios(true);
+    renderFuncionarios(state.funcionarios);
+};
+
+/* ==========================================================================
+   RELATÓRIOS (FILTROS + GRÁFICOS)
+   ========================================================================== */
+let _chartStatus = null;
+let _chartFornecedor = null;
+
+function _toDate(value) {
+  if(!value) return null;
+  if(typeof value === 'string' && value.length === 10) return new Date(value + 'T00:00:00');
+  return new Date(value);
+}
+
+async function prepararRelatorios() {
+    // carrega dados
+    if(state.produtos.length === 0) await Backend.getProdutos();
+    if(state.financeiro.length === 0) await Backend.getFinanceiro();
+    if(state.notas.length === 0) await Backend.getNotas();
+    if(state.fornecedores.length === 0) await Backend.getFornecedores(false);
+
+    // selects mês/ano
+    const selMes = $('rel_mes');
+    const selAno = $('rel_ano');
+    if(selMes && selMes.options.length === 0) {
+        const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        selMes.innerHTML = meses.map((m, idx) => `<option value="${idx+1}">${m}</option>`).join('');
+        const anoAtual = new Date().getFullYear();
+        const anos = [];
+        for(let a = anoAtual - 4; a <= anoAtual + 1; a++) anos.push(a);
+        selAno.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
+        selMes.value = String(new Date().getMonth() + 1);
+        selAno.value = String(anoAtual);
+    }
+
+    atualizarSelectFornecedores();
+}
+
+function _aplicarVisibilidadeRel(tipo) {
+    const show = (id, ok) => { const el = $(id); if(el) el.style.display = ok ? 'block' : 'none'; };
+    if(tipo === 'resumo') {
+        show('rel-bloco-resumo', true);
+        show('rel-bloco-estoque-cards', true);
+        show('rel-bloco-graficos', true);
+        show('rel-bloco-financeiro', false);
+        show('rel-bloco-notas', false);
+        show('rel-bloco-estoque', false);
+    } else if(tipo === 'financeiro') {
+        show('rel-bloco-resumo', true);
+        show('rel-bloco-estoque-cards', false);
+        show('rel-bloco-graficos', true);
+        show('rel-bloco-financeiro', true);
+        show('rel-bloco-notas', false);
+        show('rel-bloco-estoque', false);
+    } else if(tipo === 'notas') {
+        show('rel-bloco-resumo', false);
+        show('rel-bloco-estoque-cards', true);
+        show('rel-bloco-graficos', false);
+        show('rel-bloco-financeiro', false);
+        show('rel-bloco-notas', true);
+        show('rel-bloco-estoque', false);
+    } else if(tipo === 'estoque') {
+        show('rel-bloco-resumo', false);
+        show('rel-bloco-estoque-cards', true);
+        show('rel-bloco-graficos', false);
+        show('rel-bloco-financeiro', false);
+        show('rel-bloco-notas', false);
+        show('rel-bloco-estoque', true);
+    } else { // todos
+        show('rel-bloco-resumo', true);
+        show('rel-bloco-estoque-cards', true);
+        show('rel-bloco-graficos', true);
+        show('rel-bloco-financeiro', true);
+        show('rel-bloco-notas', true);
+        show('rel-bloco-estoque', true);
+    }
+}
+
+function renderRelatorios() {
+    const mes = parseInt($('rel_mes')?.value || (new Date().getMonth() + 1), 10);
+    const ano = parseInt($('rel_ano')?.value || new Date().getFullYear(), 10);
+    const tipoRel = $('rel_tipo')?.value || 'todos';
+    const statusFiltro = $('rel_status')?.value || '';
+    const fornecedorFiltro = $('rel_fornecedor')?.value || '';
+
+    _aplicarVisibilidadeRel(tipoRel);
+
+    const inicio = new Date(ano, mes - 1, 1);
+    const fim = new Date(ano, mes, 1);
+
+    let finPeriodo = (state.financeiro || []).filter(f => {
+        const d = _toDate(f.data_vencimento);
+        return d && d >= inicio && d < fim;
+    });
+    let notasPeriodo = (state.notas || []).filter(n => {
+        const d = _toDate(n.data);
+        return d && d >= inicio && d < fim;
+    });
+
+    if(statusFiltro) finPeriodo = finPeriodo.filter(f => (f.status||'') === statusFiltro);
+    if(fornecedorFiltro) {
+        finPeriodo = finPeriodo.filter(f => _norm(f.fornecedor) === _norm(fornecedorFiltro));
+        notasPeriodo = notasPeriodo.filter(n => _norm(n.fornecedor) === _norm(fornecedorFiltro));
+    }
+
+    // Totais financeiro
+    let receitas = 0, despesas = 0;
+    finPeriodo.forEach(i => {
+        const v = parseFloat(i.valor || 0);
+        if(i.tipo === 'Receita') receitas += v; else despesas += v;
+    });
+
+    // Estoque
+    let qtdEstoque = 0, valorEstoque = 0;
+    (state.produtos || []).forEach(p => {
+        const q = parseFloat(p.qtd || 0);
+        const pr = parseFloat(p.preco || 0);
+        qtdEstoque += q;
+        valorEstoque += (q * pr);
+    });
+
+    if($('rel-receitas')) $('rel-receitas').innerText = money(receitas);
+    if($('rel-despesas')) $('rel-despesas').innerText = money(despesas);
+    if($('rel-saldo')) $('rel-saldo').innerText = money(receitas - despesas);
+    if($('rel-estoque-qtd')) $('rel-estoque-qtd').innerText = String(qtdEstoque);
+    if($('rel-estoque-valor')) $('rel-estoque-valor').innerText = money(valorEstoque);
+    if($('rel-notas')) $('rel-notas').innerText = String(notasPeriodo.length);
+
+    // Tabela financeiro
+    const corpoFin = $('rel-financeiro-corpo');
+    if(corpoFin) {
+        const linhas = finPeriodo
+            .sort((a,b) => (_toDate(b.data_vencimento) - _toDate(a.data_vencimento)))
+            .slice(0, 300)
+            .map(i => {
+                const cor = i.tipo === 'Receita' ? '#27ae60' : '#e74c3c';
+                return `<tr>
+                    <td>${safeDate(i.data_vencimento)}</td>
+                    <td>${_esc(i.descricao || '')}<br><small>${_esc(i.fornecedor || '')}</small></td>
+                    <td><span style="color:${cor}">${i.tipo}</span></td>
+                    <td style="color:${cor}"><b>${money(i.valor)}</b></td>
+                    <td>${_esc(i.status || '')}</td>
+                </tr>`;
+            }).join('');
+        corpoFin.innerHTML = linhas || `<tr><td colspan="5" style="text-align:center; color:#999;">Nenhum lançamento no período</td></tr>`;
+    }
+
+    // Tabela notas
+    const corpoNotas = $('rel-notas-corpo');
+    if(corpoNotas) {
+        const linhas = notasPeriodo
+            .sort((a,b) => (_toDate(b.data) - _toDate(a.data)))
+            .slice(0, 300)
+            .map(n => `<tr>
+                <td>${safeDate(n.data)}</td>
+                <td>${_esc(n.numero || '-')}</td>
+                <td>${_esc(n.fornecedor || '-')}</td>
+                <td>${n.qtd_itens || 0}</td>
+                <td style="color:#27ae60"><b>${money(n.valor)}</b></td>
+                <td><small>${_esc(n.tipo || 'Manual')}</small></td>
+            </tr>`).join('');
+        corpoNotas.innerHTML = linhas || `<tr><td colspan="6" style="text-align:center; color:#999;">Nenhuma nota no período</td></tr>`;
+    }
+
+    // Baixo estoque
+    const corpoBaixo = $('rel-baixo-estoque-corpo');
+    if(corpoBaixo) {
+        const low = (state.produtos || [])
+            .slice()
+            .sort((a,b) => parseFloat(a.qtd || 0) - parseFloat(b.qtd || 0))
+            .slice(0, 15);
+        corpoBaixo.innerHTML = low.map(p => `<tr>
+            <td><b>${_esc(p.codigo)}</b></td>
+            <td>${_esc(p.nome)}</td>
+            <td>${_esc(p.grupo || '-')}</td>
+            <td><b>${p.qtd}</b></td>
+        </tr>`).join('') || `<tr><td colspan="4" style="text-align:center; color:#999;">Sem produtos</td></tr>`;
+    }
+
+    // Gráficos (despesas)
+    const despesasPeriodo = finPeriodo.filter(i => i.tipo === 'Despesa');
+    const somaStatus = { Pago: 0, Pendente: 0 };
+    despesasPeriodo.forEach(i => {
+        const st = (i.status === 'Pago') ? 'Pago' : 'Pendente';
+        somaStatus[st] += parseFloat(i.valor || 0);
+    });
+
+    const porFornecedor = {};
+    despesasPeriodo.forEach(i => {
+        const k = (i.fornecedor || 'Sem fornecedor').toString();
+        porFornecedor[k] = (porFornecedor[k] || 0) + parseFloat(i.valor || 0);
+    });
+    const top = Object.entries(porFornecedor).sort((a,b) => b[1]-a[1]).slice(0,10);
+    const labelsF = top.map(x => x[0]);
+    const valuesF = top.map(x => x[1]);
+
+    const ctxS = $('chart-despesas-status');
+    if(ctxS) {
+        if(_chartStatus) _chartStatus.destroy();
+        _chartStatus = new Chart(ctxS, {
+            type: 'doughnut',
+            data: { labels: ['Pago','Pendente'], datasets: [{ data: [somaStatus.Pago, somaStatus.Pendente] }] },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+
+    const ctxF = $('chart-despesas-fornecedor');
+    if(ctxF) {
+        if(_chartFornecedor) _chartFornecedor.destroy();
+        _chartFornecedor = new Chart(ctxF, {
+            type: 'bar',
+            data: { labels: labelsF, datasets: [{ label: 'Despesas', data: valuesF }] },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { maxRotation: 45, minRotation: 0 } } } }
+        });
+    }
+}
+
+
 function closeModal(id) { $(id).style.display = 'none'; }
 window.onclick = (e) => { if(e.target.classList.contains('modal')) e.target.style.display = 'none'; };
 
@@ -897,6 +721,7 @@ function injetarBotaoFinanceiroNaNota() {
     btn.onclick = () => {
         const idNota = $('nota_id_edicao').value; const fornecedor = $('nota_fornecedor').value; const numero = $('nota_numero').value;
         let valTotal = 0; state.itensNotaManual.forEach(i => valTotal += (i.qtd * i.preco));
+    if(!$('nota_fornecedor').value) { alert('Selecione um fornecedor cadastrado.'); btn.disabled = false; btn.innerText = 'Salvar'; return; }
         if(valTotal === 0) return alert("A nota não tem valor.");
         const notaObj = { id: idNota, numero: numero, fornecedor: fornecedor, valor: valTotal, parcelas_xml: null };
         if(idNota) { const notaOriginal = state.notas.find(n => n.id == idNota); if(notaOriginal && notaOriginal.parcelas_xml) { notaObj.parcelas_xml = notaOriginal.parcelas_xml; } }
@@ -1037,6 +862,7 @@ $('btn-salvar-fin-manual').onclick = async (e) => {
     const isParcelado = checkboxParcelado && checkboxParcelado.checked && !isEdit; 
     
     const dadosBase = { tipo: state.tipoFinanceiro, descricao: $('fin_man_descricao').value, fornecedor: $('fin_man_fornecedor').value, data_emissao: $('fin_man_emissao').value, status: $('fin_man_status').value };
+    if(!dadosBase.fornecedor) { alert('Selecione um fornecedor cadastrado.'); return; }
 
     if(isEdit) {
         dadosBase.id = $('fin_man_id').value; dadosBase.valor = parseFloat($('fin_man_valor').value); dadosBase.data_vencimento = $('fin_man_vencimento').value;
@@ -1125,7 +951,26 @@ $('btn-add-contagem').onclick = () => {
     $('input-busca-contagem').value = ''; $('input-qtd-contagem').value = ''; $('input-qtd-contagem').disabled = true; $('btn-add-contagem').disabled = true; state.produtoContagemSelecionado = null; $('input-busca-contagem').focus();
 };
 window.removerItemContagem = (btn, id) => { btn.closest('tr').remove(); state.itensContagem = state.itensContagem.filter(i => i.id != id); if(state.itensContagem.length === 0) $('msg-vazio-contagem').style.display = 'block'; };
-$('btnSalvarContagem').onclick = async () => { if(state.itensContagem.length === 0) return alert("Vazio."); const btn = $('btnSalvarContagem'); btn.disabled = true; btn.innerText = "Processando..."; try { await Backend.atualizarEstoqueBatch(state.itensContagem); alert("Sucesso!"); closeModal('modal-contagem'); navegar('produtos'); } catch(e) { alert(e.message); } btn.disabled = false; btn.innerText = "Concluir"; };
+$('btnSalvarContagem').onclick = async () => {
+    if (!state.itensContagem || state.itensContagem.length === 0) return alert("Nenhum item na contagem.");
+    const btn = $('btnSalvarContagem');
+    const oldText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = "Processando...";
+    try {
+        await Backend.atualizarEstoqueBatch(state.itensContagem);
+        // Recarrega produtos e volta para a tela de produtos
+        await Backend.getProdutos();
+        closeModal('modal-contagem');
+        navegar('produtos');
+    } catch (e) {
+        console.error(e);
+        alert(e?.message || 'Erro ao salvar contagem.');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = oldText || "Concluir";
+    }
+};
 
 // --- XML IMPORT ---
 $('btnImportarXML').onclick = () => { $('file-xml').value = ''; $('modal-importar-xml').style.display = 'block'; };
@@ -1167,47 +1012,118 @@ window.editUser = (id) => { const u = state.usuarios.find(x => x.id == id); if(!
 // --- CONFIG ---
 $('btnAddGrupo').onclick = async () => { const g = $('novo-grupo-nome').value; if(g && !state.grupos.includes(g)) { state.grupos.push(g); await Backend.saveGrupos(state.grupos); navegar('configuracoes'); } };
 window.delGrupo = async (g) => { state.grupos = state.grupos.filter(x => x !== g); await Backend.saveGrupos(state.grupos); navegar('configuracoes'); };
-async function updateGrupoSelects() { const grps = await Backend.getGrupos(); const opts = grps.map(g => `<option value="${g}">${g}</option>`).join(''); $('prod_grupo').innerHTML = '<option value="">Selecione...</option>' + opts; $('filtro-grupo').innerHTML = '<option value="">Todos</option>' + opts; }
+async function updateGrupoSelects() {
+    const grps = await Backend.getGrupos();
+    const opts = (grps || []).map(g => `<option value="${g}">${g}</option>`).join('');
+    const selProd = $('prod_grupo');
+    if (selProd) selProd.innerHTML = `<option value="">Selecione...</option>` + opts;
+
+    const selFiltro = $('filtro-grupo');
+    if (selFiltro) selFiltro.innerHTML = `<option value="">Todos Grupos</option>` + opts;
+}
 
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', () => {
-    const sess = localStorage.getItem('sess_gestao'); if(sess) { state.user = JSON.parse(sess); initApp(); }
-    $('btnLogin').onclick = async () => { const u = await Backend.login($('usuario').value, $('senha').value); if(u) { state.user = u; localStorage.setItem('sess_gestao', JSON.stringify(u)); initApp(); } else $('msg-erro').innerText = 'Erro login'; };
+    const sess = localStorage.getItem('sess_gestao');
+    if(sess) { state.user = JSON.parse(sess); initApp(); }
+
+    $('btnLogin').onclick = async () => {
+        const u = await Backend.login($('usuario').value, $('senha').value);
+        if(u) {
+            state.user = u;
+            localStorage.setItem('sess_gestao', JSON.stringify(u));
+            initApp();
+        } else {
+            $('msg-erro').innerText = 'Erro login';
+        }
+    };
+
     $('btnSair').onclick = () => { localStorage.removeItem('sess_gestao'); location.reload(); };
+
     document.querySelectorAll('.close').forEach(b => b.onclick = function() { this.closest('.modal').style.display='none'; });
+    window.onclick = (e) => { if(e.target.classList.contains('modal')) e.target.style.display = 'none'; };
+
     document.querySelectorAll('.sidebar li').forEach(li => li.onclick = () => navegar(li.dataset.route));
-    $('barra-pesquisa').onkeyup = () => renderProdutos(state.produtos);
-    $('barra-pesquisa-financeiro').onkeyup = () => renderFinanceiro(state.financeiro);
 
-    // --- RELATÓRIOS ---
-    if($('btnGerarRelatorio')) $('btnGerarRelatorio').onclick = async () => { await prepararRelatorios(); renderRelatorios(); aplicarFiltroRelatorioTipo(); };
-    if($('rel_mes')) $('rel_mes').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
-    if($('rel_ano')) $('rel_ano').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
-    if($('rel_tipo')) $('rel_tipo').onchange = () => aplicarFiltroRelatorioTipo();
-    if($('rel_status')) $('rel_status').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
-    if($('rel_fornecedor')) $('rel_fornecedor').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
-
-    // Funcionários
-    if($('btnNovoFuncionario')) $('btnNovoFuncionario').onclick = () => novoFuncionario();
-    if($('form-funcionario')) $('form-funcionario').onsubmit = salvarFuncionarioUI;
-    if($('btnCancelarFuncionario')) $('btnCancelarFuncionario').onclick = () => closeModal('modal-funcionario');
-    if($('func_busca')) $('func_busca').oninput = () => renderFuncionarios(state.funcionarios);
-    if($('func_status')) $('func_status').onchange = () => renderFuncionarios(state.funcionarios);
+    // Pesquisas existentes
+    if($('barra-pesquisa')) $('barra-pesquisa').onkeyup = () => renderProdutos(state.produtos);
+    if($('barra-pesquisa-financeiro')) $('barra-pesquisa-financeiro').onkeyup = () => renderFinanceiro(state.financeiro);
 
     // Fornecedores
-    if($('btnNovoFornecedor')) $('btnNovoFornecedor').onclick = () => novoFornecedor();
-    if($('form-fornecedor')) $('form-fornecedor').onsubmit = salvarFornecedorUI;
-    if($('btnCancelarFornecedor')) $('btnCancelarFornecedor').onclick = () => closeModal('modal-fornecedor');
-    if($('for_busca')) $('for_busca').oninput = () => renderFornecedores(state.fornecedores);
-    if($('for_status')) $('for_status').onchange = () => renderFornecedores(state.fornecedores);
+    if($('btnNovoFornecedor')) $('btnNovoFornecedor').onclick = async () => {
+        await Backend.getFornecedores(true);
+        abrirModalFornecedor();
+    };
+    if($('btn-salvar-fornecedor')) $('btn-salvar-fornecedor').onclick = async () => {
+        const nome = $('forn_nome').value.trim();
+        if(!nome) return alert('Informe o nome do fornecedor.');
+        const payload = {
+            id: $('forn_id').value || undefined,
+            nome,
+            cnpj_cpf: $('forn_cnpj').value.trim() || null,
+            telefone: $('forn_telefone').value.trim() || null,
+            email: $('forn_email').value.trim() || null,
+            endereco: $('forn_endereco').value.trim() || null,
+            cidade: $('forn_cidade').value.trim() || null,
+            uf: $('forn_uf').value.trim().toUpperCase() || null,
+            observacoes: $('forn_obs').value.trim() || null,
+            ativo: $('forn_ativo').value === 'true'
+        };
+        await Backend.salvarFornecedor(payload);
+        closeModal('modal-fornecedor');
+        await Backend.getFornecedores(true);
+        renderFornecedores(state.fornecedores);
+        atualizarSelectFornecedores();
+    };
+    if($('busca-fornecedores')) $('busca-fornecedores').onkeyup = () => renderFornecedores(state.fornecedores);
+    if($('filtro-fornecedores-ativo')) $('filtro-fornecedores-ativo').onchange = () => renderFornecedores(state.fornecedores);
+
+    // Funcionários
+    if($('btnNovoFuncionario')) $('btnNovoFuncionario').onclick = async () => {
+        await Backend.getFuncionarios(true);
+        abrirModalFuncionario();
+    };
+    if($('btn-salvar-funcionario')) $('btn-salvar-funcionario').onclick = async () => {
+        const nome = $('func_nome').value.trim();
+        if(!nome) return alert('Informe o nome do funcionário.');
+        const payload = {
+            id: $('func_id').value || undefined,
+            nome,
+            cargo: $('func_cargo').value.trim() || null,
+            telefone: $('func_telefone').value.trim() || null,
+            email: $('func_email').value.trim() || null,
+            salario: $('func_salario').value ? parseFloat($('func_salario').value) : 0,
+            data_admissao: $('func_admissao').value || null,
+            observacoes: $('func_obs').value.trim() || null,
+            ativo: $('func_ativo').value === 'true'
+        };
+        await Backend.salvarFuncionario(payload);
+        closeModal('modal-funcionario');
+        await Backend.getFuncionarios(true);
+        renderFuncionarios(state.funcionarios);
+    };
+    if($('busca-funcionarios')) $('busca-funcionarios').onkeyup = () => renderFuncionarios(state.funcionarios);
+    if($('filtro-funcionarios-ativo')) $('filtro-funcionarios-ativo').onchange = () => renderFuncionarios(state.funcionarios);
+
+    // Relatórios
+    if($('btnGerarRelatorio')) $('btnGerarRelatorio').onclick = () => renderRelatorios();
+    if($('rel_tipo')) $('rel_tipo').onchange = () => renderRelatorios();
+    if($('rel_status')) $('rel_status').onchange = () => renderRelatorios();
+    if($('rel_fornecedor')) $('rel_fornecedor').onchange = () => renderRelatorios();
+    if($('rel_mes')) $('rel_mes').onchange = () => renderRelatorios();
+    if($('rel_ano')) $('rel_ano').onchange = () => renderRelatorios();
 
     if($('btnPDFRelatorio')) $('btnPDFRelatorio').onclick = () => {
-        const area = $('relatorio-area');
-        if(!area) return;
-        const mes = $('rel_mes')?.value || String(new Date().getMonth() + 1);
-        const ano = $('rel_ano')?.value || String(new Date().getFullYear());
-        html2pdf().set({ margin: 10, filename: `relatorio_${mes}-${ano}.pdf` }).from(area).save();
+        const el = document.getElementById('relatorio-area');
+        if(!el) return;
+        const opt = { margin: 8, filename: 'relatorio.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+        html2pdf().set(opt).from(el).save();
     };
 });
 
-function initApp() { $('tela-login').style.display = 'none'; $('tela-dashboard').style.display = 'flex'; $('display-nome-usuario').innerText = state.user.nome; navegar('dashboard'); }
+    document.querySelectorAll('.sidebar li').forEach(li => li.onclick = () => navegar(li.dataset.route));
+    $('barra-pesquisa').onkeyup = () => renderProdutos(state.produtos);
+    $('barra-pesquisa-financeiro').onkeyup = () => renderFinanceiro(state.financeiro);
+});
+
+function initApp() { $('tela-login').style.display = 'none'; $('display-nome-usuario').innerText = state.user.nome || state.user.usuario || ''; navegar('dashboard'); }
