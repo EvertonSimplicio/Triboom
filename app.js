@@ -6,6 +6,14 @@
 const _db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = (id) => document.getElementById(id);
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 const toast = (msg) => alert(msg);
 const money = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -90,7 +98,7 @@ const Backend = {
         return true;
     },
     async getNotas() {
-        const { data, error } = await _db.from('notas_entrada').select('*').order('data', { ascending: false });
+        const { data, error } = await _db.from('notas_entrada').select('*').order('created_at', { ascending: false }).order('data', { ascending: false });
         if(error) console.error("Erro notas:", error);
         state.notas = data || [];
         return state.notas;
@@ -154,7 +162,9 @@ async function navegar(modulo) {
     } else if(modulo === 'notas_entrada') {
         $('view-notas-entrada').style.display = 'block';
         if(state.produtos.length === 0) await Backend.getProdutos();
-        renderNotas(await Backend.getNotas());
+        const _notas = await Backend.getNotas();
+        _notas.sort((a,b) => (_toDate(b.created_at || b.data) - _toDate(a.created_at || a.data)));
+        renderNotas(_notas);
     } else if(modulo === 'funcionarios') {
         const view = $('view-funcionarios');
         if(view) view.style.display = 'block';
@@ -176,6 +186,12 @@ async function navegar(modulo) {
 }
 
 /* ==========================================================================
+   RELATÓRIOS
+   ========================================================================== */
+let chartDespStatus = null;
+let chartDespFornecedor = null;
+
+/* ========================================================================== 
    RELATÓRIOS
    ========================================================================== */
 function _toDate(value) {
@@ -206,7 +222,25 @@ async function prepararRelatorios() {
         selMes.value = String(new Date().getMonth() + 1);
         selAno.value = String(anoAtual);
     }
+    // Popula filtro de fornecedor (com base no financeiro)
+    const selForn = $('rel_fornecedor');
+    if(selForn) {
+        const atual = selForn.value || 'todos';
+        const fornecedores = Array.from(new Set((state.financeiro || [])
+            .map(i => (i.fornecedor || '').trim())
+            .filter(Boolean)))
+            .sort((a,b) => a.localeCompare(b, 'pt-BR', { sensitivity:'base' }));
+
+        selForn.innerHTML = `<option value="todos">Todos Fornecedores</option>` + fornecedores.map(f => 
+            `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`
+        ).join('');
+
+        if(fornecedores.includes(atual)) selForn.value = atual;
+        else selForn.value = 'todos';
+    }
+
 }
+
 
 function renderRelatorios() {
     const selMes = $('rel_mes');
@@ -226,9 +260,27 @@ function renderRelatorios() {
         return d && d >= inicio && d < fim;
     });
 
+
+    // Filtros do Relatório
+    const filtroStatus = ($('rel_status')?.value || 'todos');
+    const filtroFornecedor = ($('rel_fornecedor')?.value || 'todos');
+
+    let finFiltrado = finPeriodo.slice();
+    if (filtroStatus !== 'todos') {
+        finFiltrado = finFiltrado.filter(i => (i.status || '').toLowerCase() === filtroStatus.toLowerCase());
+    }
+    if (filtroFornecedor !== 'todos') {
+        finFiltrado = finFiltrado.filter(i => (i.fornecedor || '') === filtroFornecedor);
+    }
+
+    let notasFiltradas = notasPeriodo.slice();
+    if (filtroFornecedor !== 'todos') {
+        notasFiltradas = notasFiltradas.filter(n => (n.fornecedor || '') === filtroFornecedor);
+    }
+
     // Totais financeiro
     let receitas = 0, despesas = 0;
-    finPeriodo.forEach(i => {
+    finFiltrado.forEach(i => {
         const v = parseFloat(i.valor || 0);
         if(i.tipo === 'Receita') receitas += v; else despesas += v;
     });
@@ -247,12 +299,16 @@ function renderRelatorios() {
     if($('rel-saldo')) $('rel-saldo').innerText = money(receitas - despesas);
     if($('rel-estoque-qtd')) $('rel-estoque-qtd').innerText = String(qtdEstoque);
     if($('rel-estoque-valor')) $('rel-estoque-valor').innerText = money(valorEstoque);
-    if($('rel-notas')) $('rel-notas').innerText = String(notasPeriodo.length);
+    if($('rel-notas')) $('rel-notas').innerText = String(notasFiltradas.length);
+
+    // Gráficos (Despesas)
+    renderGraficosDespesas(finFiltrado);
+
 
     // Tabela financeiro
     const corpoFin = $('rel-financeiro-corpo');
     if(corpoFin) {
-        const linhas = finPeriodo
+        const linhas = finFiltrado
             .sort((a,b) => (_toDate(b.data_vencimento) - _toDate(a.data_vencimento)))
             .slice(0, 200)
             .map(i => {
@@ -272,7 +328,7 @@ function renderRelatorios() {
     // Tabela notas
     const corpoNotas = $('rel-notas-corpo');
     if(corpoNotas) {
-        const linhas = notasPeriodo
+        const linhas = notasFiltradas
             .sort((a,b) => (_toDate(b.data) - _toDate(a.data)))
             .slice(0, 200)
             .map(n => `<tr>
@@ -304,11 +360,87 @@ function renderRelatorios() {
     }
 }
 
+
+function renderGraficosDespesas(listaFinanceiroFiltrada) {
+    try {
+        if(typeof Chart === 'undefined') return;
+
+        const lista = Array.isArray(listaFinanceiroFiltrada) ? listaFinanceiroFiltrada : [];
+        const despesas = lista.filter(i => (i.tipo || '').toLowerCase() === 'despesa');
+
+        // Despesas por Status (Pago x Pendente)
+        let pago = 0, pendente = 0, outros = 0;
+        despesas.forEach(i => {
+            const v = parseFloat(i.valor || 0) || 0;
+            const st = (i.status || '').toLowerCase();
+            if(st === 'pago') pago += v;
+            else if(st === 'pendente') pendente += v;
+            else outros += v;
+        });
+
+        const ctx1 = $('chart-desp-status')?.getContext?.('2d');
+        if(ctx1) {
+            if(chartDespStatus) chartDespStatus.destroy();
+            chartDespStatus = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pago', 'Pendente', 'Outros'],
+                    datasets: [{
+                        data: [pago, pendente, outros]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        // Despesas por Fornecedor (Top 10)
+        const mapa = {};
+        despesas.forEach(i => {
+            const forn = (i.fornecedor || 'Sem fornecedor').trim() || 'Sem fornecedor';
+            const v = parseFloat(i.valor || 0) || 0;
+            mapa[forn] = (mapa[forn] || 0) + v;
+        });
+
+        const pares = Object.entries(mapa).sort((a,b) => b[1]-a[1]).slice(0, 10);
+        const labels = pares.map(p => p[0]);
+        const valores = pares.map(p => p[1]);
+
+        const ctx2 = $('chart-desp-forn')?.getContext?.('2d');
+        if(ctx2) {
+            if(chartDespFornecedor) chartDespFornecedor.destroy();
+            chartDespFornecedor = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Total (R$)',
+                        data: valores
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { ticks: { callback: (val) => money(val) } }
+                    }
+                }
+            });
+        }
+    } catch(e) {
+        console.warn('Erro ao gerar gráficos:', e);
+    }
+}
+
 function aplicarFiltroRelatorioTipo() {
     const tipo = ($('rel_tipo')?.value || 'todos').toLowerCase();
 
     const secResumo = $('rel-sec-resumo');
-    const cardsFin = $('rel-cards-fin');
+    const secGraficos = $('rel-sec-graficos');
     const cardsEst = $('rel-cards-estoque');
 
     const secFin = $('rel-sec-financeiro');
@@ -319,7 +451,7 @@ function aplicarFiltroRelatorioTipo() {
 
     // padrão: tudo visível
     show(secResumo, true);
-    show(cardsFin, true);
+    show(secGraficos, true);
     show(cardsEst, true);
     show(secFin, true);
     show(secNotas, true);
@@ -335,23 +467,24 @@ function aplicarFiltroRelatorioTipo() {
     }
 
     if(tipo === 'financeiro') {
+        show(secResumo, false);
+        show(secGraficos, false);
         show(cardsEst, false);
         show(secNotas, false);
         show(secBaixo, false);
-        show(secFin, true);
         return;
     }
 
     if(tipo === 'notas') {
-        show(cardsFin, false);
+        show(secGraficos, false);
         show(secFin, false);
         show(secBaixo, false);
-        show(secNotas, true);
         return;
     }
 
     if(tipo === 'estoque') {
-        show(cardsFin, false);
+        show(secResumo, false);
+        show(secGraficos, false);
         show(secFin, false);
         show(secNotas, false);
         show(secBaixo, true);
@@ -788,6 +921,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if($('rel_mes')) $('rel_mes').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
     if($('rel_ano')) $('rel_ano').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
     if($('rel_tipo')) $('rel_tipo').onchange = () => aplicarFiltroRelatorioTipo();
+    if($('rel_status')) $('rel_status').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
+    if($('rel_fornecedor')) $('rel_fornecedor').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
     if($('btnPDFRelatorio')) $('btnPDFRelatorio').onclick = () => {
         const area = $('relatorio-area');
         if(!area) return;

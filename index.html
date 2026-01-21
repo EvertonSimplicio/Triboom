@@ -100,7 +100,7 @@
 
     <div id="tela-dashboard">
         <nav class="sidebar">
-            <h2>Minha Empresa</h2>
+            <h2>Triboom Sorvetes</h2>
             <ul>
                 <li data-route="dashboard" class="ativo"><span class="material-icons">dashboard</span> Visão Geral</li>
                 <li data-route="produtos"><span class="material-icons">inventory_2</span> Produtos & Estoque</li>
@@ -196,6 +196,14 @@
                         <option value="notas">Notas de Entrada</option>
                         <option value="estoque">Estoque</option>
                     </select>
+                    <select id="rel_status" style="max-width: 180px;">
+                        <option value="todos">Todos Status</option>
+                        <option value="Pago">Pago</option>
+                        <option value="Pendente">Pendente</option>
+                    </select>
+                    <select id="rel_fornecedor" style="max-width: 280px;">
+                        <option value="todos">Todos Fornecedores</option>
+                    </select>
                     <button class="btn-action btn-add" id="btnGerarRelatorio"><span class="material-icons">refresh</span> Atualizar</button>
                     <button class="btn-action" id="btnPDFRelatorio" style="background:#e74c3c"><span class="material-icons">picture_as_pdf</span> PDF</button>
                 </div>
@@ -212,6 +220,19 @@
                         <div class="card"><h3>Itens em Estoque (Qtd)</h3><div class="valor" id="rel-estoque-qtd">0</div></div>
                         <div class="card"><h3>Valor do Estoque</h3><div class="valor" id="rel-estoque-valor">R$ 0,00</div></div>
                         <div class="card"><h3>Notas do Mês</h3><div class="valor" id="rel-notas">0</div></div>
+                    <div id="rel-sec-graficos" style="margin-top:20px;">
+                        <div class="card-container">
+                            <div class="card" style="min-height:320px;">
+                                <h3>Despesas por Status</h3>
+                                <canvas id="chart-desp-status" height="220"></canvas>
+                            </div>
+                            <div class="card" style="min-height:320px;">
+                                <h3>Despesas por Fornecedor (Top 10)</h3>
+                                <canvas id="chart-desp-forn" height="220"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
                     </div>
 
                     </div>
