@@ -100,7 +100,7 @@
 
     <div id="tela-dashboard">
         <nav class="sidebar">
-            <h2>Triboom Sorvetes</h2>
+            <h2>Minha Empresa</h2>
             <ul>
                 <li data-route="dashboard" class="ativo"><span class="material-icons">dashboard</span> Visão Geral</li>
                 <li data-route="produtos"><span class="material-icons">inventory_2</span> Produtos & Estoque</li>
@@ -274,28 +274,57 @@
             </div>
 
             <div id="view-funcionarios" class="view-section">
-                <div class="toolbar">
-                    <button class="btn-action btn-add" id="btnNovoFuncionario"><span class="material-icons">add</span> Novo Funcionário</button>
-                </div>
-                <div style="background:white; border-radius:8px; padding:18px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-                    <p style="margin:0; color:#666;">
-                        Módulo <b>Funcionários</b> criado. Se você quiser, eu adiciono cadastro completo (nome, cargo, contato, salário, data admissão)
-                        e permissões por usuário.
-                    </p>
-                </div>
-            </div>
+  <div class="toolbar">
+    <input id="func_busca" placeholder="Buscar funcionário..." style="flex:1; max-width: 520px;">
+    <select id="func_status" style="max-width: 220px;">
+      <option value="todos">Todos</option>
+      <option value="ativos">Somente Ativos</option>
+      <option value="inativos">Somente Inativos</option>
+    </select>
+    <button class="btn-action btn-add" id="btnNovoFuncionario"><span class="material-icons">add</span> Novo Funcionário</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>Cargo</th>
+        <th>Contato</th>
+        <th>Salário</th>
+        <th>Admissão</th>
+        <th>Status</th>
+        <th style="width:110px;">Ações</th>
+      </tr>
+    </thead>
+    <tbody id="tabela-funcionarios-corpo"></tbody>
+  </table>
+</div>
 
             <div id="view-fornecedores" class="view-section">
-                <div class="toolbar">
-                    <button class="btn-action btn-add" id="btnNovoFornecedor"><span class="material-icons">add</span> Novo Fornecedor</button>
-                </div>
-                <div style="background:white; border-radius:8px; padding:18px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-                    <p style="margin:0; color:#666;">
-                        Módulo <b>Fornecedores</b> criado. Se você quiser, eu adiciono cadastro completo (nome, CNPJ/CPF, contato, endereço, observações)
-                        e vínculo com Notas/Financeiro.
-                    </p>
-                </div>
-            </div>
+  <div class="toolbar">
+    <input id="for_busca" placeholder="Buscar fornecedor..." style="flex:1; max-width: 520px;">
+    <select id="for_status" style="max-width: 220px;">
+      <option value="todos">Todos</option>
+      <option value="ativos">Somente Ativos</option>
+      <option value="inativos">Somente Inativos</option>
+    </select>
+    <button class="btn-action btn-add" id="btnNovoFornecedor"><span class="material-icons">add</span> Novo Fornecedor</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Fornecedor</th>
+        <th>CNPJ/CPF</th>
+        <th>Contato</th>
+        <th>Cidade/UF</th>
+        <th>Status</th>
+        <th style="width:110px;">Ações</th>
+      </tr>
+    </thead>
+    <tbody id="tabela-fornecedores-corpo"></tbody>
+  </table>
+</div>
 
             <div id="view-configuracoes" class="view-section">
                 <h3>Grupos de Produtos</h3>
@@ -473,6 +502,111 @@
     <script src="config.js"></script>
     
     <script src="app.js"></script>
+
+
+
+<div id="modal-funcionario" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h3 id="func_titulo_modal">Funcionário</h3>
+    <form id="form-funcionario">
+      <input type="hidden" id="func_id">
+
+      <div class="form-group"><label>Nome*</label><input type="text" id="func_nome" required></div>
+      <div class="form-group"><label>Cargo</label><input type="text" id="func_cargo"></div>
+
+      <div class="row">
+        <div class="col">
+          <div class="form-group"><label>Telefone</label><input type="text" id="func_telefone"></div>
+        </div>
+        <div class="col">
+          <div class="form-group"><label>E-mail</label><input type="email" id="func_email"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <div class="form-group"><label>Salário</label><input type="text" id="func_salario" placeholder="0,00"></div>
+        </div>
+        <div class="col">
+          <div class="form-group"><label>Data Admissão</label><input type="date" id="func_admissao"></div>
+        </div>
+      </div>
+
+      <div class="form-group"><label>Observações</label><input type="text" id="func_obs" placeholder="Opcional"></div>
+
+      <div class="form-group" style="display:flex; align-items:center; gap:10px;">
+        <input type="checkbox" id="func_ativo" checked style="width:auto;">
+        <label for="func_ativo" style="margin:0;">Ativo</label>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn-action" id="btnCancelarFuncionario">Cancelar</button>
+        <button type="submit" class="btn-action btn-add" id="btnSalvarFuncionario"><span class="material-icons">save</span> Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-action" onclick="closeModal('modal-funcionario')">Cancelar</button>
+        <button type="submit" class="btn-action btn-add"><span class="material-icons">save</span> Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-fornecedor" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h3 id="for_titulo_modal">Fornecedor</h3>
+    <form id="form-fornecedor">
+      <input type="hidden" id="for_id">
+
+      <div class="form-group"><label>Nome*</label><input type="text" id="for_nome" required></div>
+      <div class="form-group"><label>CNPJ/CPF</label><input type="text" id="for_cnpjcpf"></div>
+
+      <div class="row">
+        <div class="col">
+          <div class="form-group"><label>Telefone</label><input type="text" id="for_telefone"></div>
+        </div>
+        <div class="col">
+          <div class="form-group"><label>E-mail</label><input type="email" id="for_email"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <div class="form-group"><label>Cidade</label><input type="text" id="for_cidade"></div>
+        </div>
+        <div class="col">
+          <div class="form-group"><label>UF</label><input type="text" id="for_uf" maxlength="2" style="text-transform:uppercase;"></div>
+        </div>
+      </div>
+
+      <div class="form-group"><label>Endereço</label><input type="text" id="for_endereco"></div>
+      <div class="form-group"><label>Observações</label><input type="text" id="for_obs" placeholder="Opcional"></div>
+
+      <div class="form-group" style="display:flex; align-items:center; gap:10px;">
+        <input type="checkbox" id="for_ativo" checked style="width:auto;">
+        <label for="for_ativo" style="margin:0;">Ativo</label>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn-action" id="btnCancelarFornecedor">Cancelar</button>
+        <button type="submit" class="btn-action btn-add" id="btnSalvarFornecedor"><span class="material-icons">save</span> Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-action" onclick="closeModal('modal-fornecedor')">Cancelar</button>
+        <button type="submit" class="btn-action btn-add"><span class="material-icons">save</span> Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 </body>
 </html>

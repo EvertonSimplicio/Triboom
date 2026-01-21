@@ -15,6 +15,22 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 const toast = (msg) => alert(msg);
+function parseBRNumber(v){
+    if(v === null || v === undefined) return 0;
+    if(typeof v === 'number') return v;
+    const s = String(v).trim();
+    if(!s) return 0;
+    // remove currency and spaces
+    const cleaned = s.replace(/[^0-9,.-]/g,'');
+    // if has comma and dot, assume dot thousand and comma decimal
+    if(cleaned.includes(',') && cleaned.includes('.')){
+        return parseFloat(cleaned.replace(/\./g,'').replace(',','.')) || 0;
+    }
+    // if only comma, decimal
+    if(cleaned.includes(',')) return parseFloat(cleaned.replace(',','.')) || 0;
+    return parseFloat(cleaned) || 0;
+}
+
 const money = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /* ==========================================================================
@@ -26,6 +42,8 @@ let state = {
     financeiro: [],
     notas: [],
     usuarios: [],
+    funcionarios: [],
+    fornecedores: [],
     grupos: [],
     route: 'dashboard',
     tipoFinanceiro: 'Despesa',
@@ -122,6 +140,50 @@ const Backend = {
     async excluirUsuario(id) {
         return await _db.from('usuarios').delete().eq('id', id);
     },
+    async getFuncionarios() {
+        const { data, error } = await _db.from('funcionarios')
+            .select('*')
+            .order('nome', { ascending: true });
+        if(error) console.error("Erro funcionarios:", error);
+        state.funcionarios = data || [];
+        return state.funcionarios;
+    },
+    async salvarFuncionario(payload) {
+        const { data, error } = await _db.from('funcionarios')
+            .upsert(payload)
+            .select()
+            .maybeSingle();
+        if(error) console.error("Erro salvar funcionario:", error);
+        return data;
+    },
+    async excluirFuncionario(id) {
+        const { error } = await _db.from('funcionarios').delete().eq('id', id);
+        if(error) console.error("Erro excluir funcionario:", error);
+        return !error;
+    },
+
+    async getFornecedores() {
+        const { data, error } = await _db.from('fornecedores')
+            .select('*')
+            .order('nome', { ascending: true });
+        if(error) console.error("Erro fornecedores:", error);
+        state.fornecedores = data || [];
+        return state.fornecedores;
+    },
+    async salvarFornecedor(payload) {
+        const { data, error } = await _db.from('fornecedores')
+            .upsert(payload)
+            .select()
+            .maybeSingle();
+        if(error) console.error("Erro salvar fornecedor:", error);
+        return data;
+    },
+    async excluirFornecedor(id) {
+        const { error } = await _db.from('fornecedores').delete().eq('id', id);
+        if(error) console.error("Erro excluir fornecedor:", error);
+        return !error;
+    },
+
     async getGrupos() {
         const { data } = await _db.from('ajustes').select('config_json').limit(1).maybeSingle();
         state.grupos = data?.config_json?.grupos || [];
@@ -168,10 +230,13 @@ async function navegar(modulo) {
     } else if(modulo === 'funcionarios') {
         const view = $('view-funcionarios');
         if(view) view.style.display = 'block';
+        renderFuncionarios(await Backend.getFuncionarios());
     } else if(modulo === 'fornecedores') {
         const view = $('view-fornecedores');
         if(view) view.style.display = 'block';
-    } else if(modulo === 'configuracoes') {
+        renderFornecedores(await Backend.getFornecedores());
+    }
+else if(modulo === 'configuracoes') {
         $('view-configuracoes').style.display = 'block';
         renderGrupos(await Backend.getGrupos());
     } else if(modulo === 'relatorios') {
@@ -601,6 +666,204 @@ async function realizarBaixaEmLote() {
 function renderUsuarios(lista) {
     $('tabela-usuarios-corpo').innerHTML = lista.map(u => `<tr><td>${u.nome}</td><td>${u.usuario}</td><td>${u.perfil}</td><td><span class="material-icons" onclick="editUser('${u.id}')" style="cursor:pointer">edit</span><span class="material-icons" style="color:red; cursor:pointer" onclick="delUser('${u.id}')">delete</span></td></tr>`).join('');
 }
+/* ==========================================================================
+   FUNCIONÁRIOS
+   ========================================================================== */
+function filtrarFuncionariosLista(lista) {
+    const q = ($('func_busca')?.value || '').toLowerCase().trim();
+    const st = $('func_status')?.value || 'todos';
+    return (lista || []).filter(f => {
+        const ativo = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
+        if(st === 'ativos' && !ativo) return false;
+        if(st === 'inativos' && ativo) return false;
+        if(!q) return true;
+        const blob = `${f.nome||''} ${f.cargo||''} ${f.telefone||''} ${f.email||''}`.toLowerCase();
+        return blob.includes(q);
+    });
+}
+function renderFuncionarios(lista) {
+    const corpo = $('tabela-funcionarios-corpo');
+    if(!corpo) return;
+    const dados = filtrarFuncionariosLista(lista || state.funcionarios);
+    corpo.innerHTML = (dados.length ? dados : []).map(f => {
+        const ativo = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
+        const badge = ativo
+            ? `<span style="cursor:pointer; padding:4px 10px; border-radius:12px; background:#e8f7ee; color:#2e7d32; font-weight:600; font-size:12px;" onclick="toggleFuncionarioAtivo('${f.id}', false)">Ativo</span>`
+            : `<span style="cursor:pointer; padding:4px 10px; border-radius:12px; background:#fff3e0; color:#ef6c00; font-weight:600; font-size:12px;" onclick="toggleFuncionarioAtivo('${f.id}', true)">Inativo</span>`;
+        const contato = [f.telefone, f.email].filter(Boolean).join(' • ');
+        return `<tr>
+            <td><b>${escapeHtml(f.nome||'')}</b></td>
+            <td>${escapeHtml(f.cargo||'-')}</td>
+            <td>${escapeHtml(contato||'-')}</td>
+            <td>${money(f.salario||0)}</td>
+            <td>${f.data_admissao ? safeDate(f.data_admissao) : '-'}</td>
+            <td>${badge}</td>
+            <td>
+              <span class="material-icons" style="cursor:pointer" title="Editar" onclick="abrirFuncionario('${f.id}')">edit</span>
+              <span class="material-icons" style="cursor:pointer;color:#e74c3c" title="Excluir" onclick="excluirFuncionarioUI('${f.id}')">delete</span>
+            </td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="7" style="text-align:center; color:#999;">Nenhum funcionário encontrado</td></tr>`;
+}
+function abrirFuncionario(id) {
+    const f = (state.funcionarios || []).find(x => String(x.id) === String(id));
+    if(!f) return;
+    $('func_titulo_modal').innerText = 'Editar Funcionário';
+    $('func_id').value = f.id || '';
+    $('func_nome').value = f.nome || '';
+    $('func_cargo').value = f.cargo || '';
+    $('func_telefone').value = f.telefone || '';
+    $('func_email').value = f.email || '';
+    $('func_salario').value = (f.salario ?? '') === '' ? '' : String(f.salario).replace('.', ',');
+    $('func_admissao').value = f.data_admissao || '';
+    $('func_obs').value = f.observacoes || '';
+    $('func_ativo').checked = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
+    $('modal-funcionario').style.display = 'block';
+}
+function novoFuncionario() {
+    $('func_titulo_modal').innerText = 'Novo Funcionário';
+    $('form-funcionario').reset();
+    $('func_id').value = '';
+    $('func_ativo').checked = true;
+    $('modal-funcionario').style.display = 'block';
+    setTimeout(() => $('func_nome')?.focus(), 1);
+}
+async function salvarFuncionarioUI(e) {
+    e.preventDefault();
+    const payload = {
+        id: $('func_id').value || undefined,
+        nome: $('func_nome').value.trim(),
+        cargo: $('func_cargo').value.trim() || null,
+        telefone: $('func_telefone').value.trim() || null,
+        email: $('func_email').value.trim() || null,
+        salario: parseBRNumber($('func_salario').value),
+        data_admissao: $('func_admissao').value || null,
+        observacoes: $('func_obs').value.trim() || null,
+        ativo: $('func_ativo').checked
+    };
+    if(!payload.nome) return toast('Informe o nome do funcionário.');
+    const saved = await Backend.salvarFuncionario(payload);
+    if(!saved) return toast('Não foi possível salvar. Verifique se a tabela "funcionarios" existe no Supabase.');
+    closeModal('modal-funcionario');
+    await Backend.getFuncionarios();
+    renderFuncionarios(state.funcionarios);
+    toast('Funcionário salvo!');
+}
+async function excluirFuncionarioUI(id) {
+    if(!confirm('Excluir este funcionário?')) return;
+    const ok = await Backend.excluirFuncionario(id);
+    if(!ok) return toast('Não foi possível excluir. Verifique o banco.');
+    await Backend.getFuncionarios();
+    renderFuncionarios(state.funcionarios);
+    toast('Funcionário excluído!');
+}
+async function toggleFuncionarioAtivo(id, novoStatus) {
+    const saved = await Backend.salvarFuncionario({ id, ativo: !!novoStatus });
+    if(!saved) return toast('Não foi possível atualizar status.');
+    await Backend.getFuncionarios();
+    renderFuncionarios(state.funcionarios);
+}
+
+/* ==========================================================================
+   FORNECEDORES
+   ========================================================================== */
+function filtrarFornecedoresLista(lista) {
+    const q = ($('for_busca')?.value || '').toLowerCase().trim();
+    const st = $('for_status')?.value || 'todos';
+    return (lista || []).filter(f => {
+        const ativo = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
+        if(st === 'ativos' && !ativo) return false;
+        if(st === 'inativos' && ativo) return false;
+        if(!q) return true;
+        const blob = `${f.nome||''} ${f.cnpj_cpf||''} ${f.telefone||''} ${f.email||''} ${f.cidade||''} ${f.uf||''}`.toLowerCase();
+        return blob.includes(q);
+    });
+}
+function renderFornecedores(lista) {
+    const corpo = $('tabela-fornecedores-corpo');
+    if(!corpo) return;
+    const dados = filtrarFornecedoresLista(lista || state.fornecedores);
+    corpo.innerHTML = (dados.length ? dados : []).map(f => {
+        const ativo = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
+        const badge = ativo
+            ? `<span style="cursor:pointer; padding:4px 10px; border-radius:12px; background:#e8f7ee; color:#2e7d32; font-weight:600; font-size:12px;" onclick="toggleFornecedorAtivo('${f.id}', false)">Ativo</span>`
+            : `<span style="cursor:pointer; padding:4px 10px; border-radius:12px; background:#fff3e0; color:#ef6c00; font-weight:600; font-size:12px;" onclick="toggleFornecedorAtivo('${f.id}', true)">Inativo</span>`;
+        const contato = [f.telefone, f.email].filter(Boolean).join(' • ');
+        const cidadeuf = [f.cidade, f.uf].filter(Boolean).join('/');
+        return `<tr>
+            <td><b>${escapeHtml(f.nome||'')}</b></td>
+            <td>${escapeHtml(f.cnpj_cpf||'-')}</td>
+            <td>${escapeHtml(contato||'-')}</td>
+            <td>${escapeHtml(cidadeuf||'-')}</td>
+            <td>${badge}</td>
+            <td>
+              <span class="material-icons" style="cursor:pointer" title="Editar" onclick="abrirFornecedor('${f.id}')">edit</span>
+              <span class="material-icons" style="cursor:pointer;color:#e74c3c" title="Excluir" onclick="excluirFornecedorUI('${f.id}')">delete</span>
+            </td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="6" style="text-align:center; color:#999;">Nenhum fornecedor encontrado</td></tr>`;
+}
+function abrirFornecedor(id) {
+    const f = (state.fornecedores || []).find(x => String(x.id) === String(id));
+    if(!f) return;
+    $('for_titulo_modal').innerText = 'Editar Fornecedor';
+    $('for_id').value = f.id || '';
+    $('for_nome').value = f.nome || '';
+    $('for_cnpjcpf').value = f.cnpj_cpf || '';
+    $('for_telefone').value = f.telefone || '';
+    $('for_email').value = f.email || '';
+    $('for_cidade').value = f.cidade || '';
+    $('for_uf').value = f.uf || '';
+    $('for_endereco').value = f.endereco || '';
+    $('for_obs').value = f.observacoes || '';
+    $('for_ativo').checked = (f.ativo === undefined || f.ativo === null) ? true : !!f.ativo;
+    $('modal-fornecedor').style.display = 'block';
+}
+function novoFornecedor() {
+    $('for_titulo_modal').innerText = 'Novo Fornecedor';
+    $('form-fornecedor').reset();
+    $('for_id').value = '';
+    $('for_ativo').checked = true;
+    $('modal-fornecedor').style.display = 'block';
+    setTimeout(() => $('for_nome')?.focus(), 1);
+}
+async function salvarFornecedorUI(e) {
+    e.preventDefault();
+    const payload = {
+        id: $('for_id').value || undefined,
+        nome: $('for_nome').value.trim(),
+        cnpj_cpf: $('for_cnpjcpf').value.trim() || null,
+        telefone: $('for_telefone').value.trim() || null,
+        email: $('for_email').value.trim() || null,
+        cidade: $('for_cidade').value.trim() || null,
+        uf: $('for_uf').value.trim().toUpperCase() || null,
+        endereco: $('for_endereco').value.trim() || null,
+        observacoes: $('for_obs').value.trim() || null,
+        ativo: $('for_ativo').checked
+    };
+    if(!payload.nome) return toast('Informe o nome do fornecedor.');
+    const saved = await Backend.salvarFornecedor(payload);
+    if(!saved) return toast('Não foi possível salvar. Verifique se a tabela "fornecedores" existe no Supabase.');
+    closeModal('modal-fornecedor');
+    await Backend.getFornecedores();
+    renderFornecedores(state.fornecedores);
+    toast('Fornecedor salvo!');
+}
+async function excluirFornecedorUI(id) {
+    if(!confirm('Excluir este fornecedor?')) return;
+    const ok = await Backend.excluirFornecedor(id);
+    if(!ok) return toast('Não foi possível excluir. Verifique o banco.');
+    await Backend.getFornecedores();
+    renderFornecedores(state.fornecedores);
+    toast('Fornecedor excluído!');
+}
+async function toggleFornecedorAtivo(id, novoStatus) {
+    const saved = await Backend.salvarFornecedor({ id, ativo: !!novoStatus });
+    if(!saved) return toast('Não foi possível atualizar status.');
+    await Backend.getFornecedores();
+    renderFornecedores(state.fornecedores);
+}
+
 function renderGrupos(lista) { $('tabela-config-grupos').innerHTML = lista.map(g => `<tr><td>${g}</td><td><span class="material-icons" style="color:red; cursor:pointer" onclick="delGrupo('${g}')">delete</span></td></tr>`).join(''); }
 
 /* ==========================================================================
@@ -923,6 +1186,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if($('rel_tipo')) $('rel_tipo').onchange = () => aplicarFiltroRelatorioTipo();
     if($('rel_status')) $('rel_status').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
     if($('rel_fornecedor')) $('rel_fornecedor').onchange = () => { renderRelatorios(); aplicarFiltroRelatorioTipo(); };
+
+    // Funcionários
+    if($('btnNovoFuncionario')) $('btnNovoFuncionario').onclick = () => novoFuncionario();
+    if($('form-funcionario')) $('form-funcionario').onsubmit = salvarFuncionarioUI;
+    if($('btnCancelarFuncionario')) $('btnCancelarFuncionario').onclick = () => closeModal('modal-funcionario');
+    if($('func_busca')) $('func_busca').oninput = () => renderFuncionarios(state.funcionarios);
+    if($('func_status')) $('func_status').onchange = () => renderFuncionarios(state.funcionarios);
+
+    // Fornecedores
+    if($('btnNovoFornecedor')) $('btnNovoFornecedor').onclick = () => novoFornecedor();
+    if($('form-fornecedor')) $('form-fornecedor').onsubmit = salvarFornecedorUI;
+    if($('btnCancelarFornecedor')) $('btnCancelarFornecedor').onclick = () => closeModal('modal-fornecedor');
+    if($('for_busca')) $('for_busca').oninput = () => renderFornecedores(state.fornecedores);
+    if($('for_status')) $('for_status').onchange = () => renderFornecedores(state.fornecedores);
+
     if($('btnPDFRelatorio')) $('btnPDFRelatorio').onclick = () => {
         const area = $('relatorio-area');
         if(!area) return;
