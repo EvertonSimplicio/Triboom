@@ -110,11 +110,34 @@ const Backend = {
         return state.usuarios;
     },
     async salvarUsuario(u) {
-        if(u.id) return await _db.from('usuarios').update(u).eq('id', u.id);
-        return await _db.from('usuarios').insert([u]);
+        try {
+            // Normaliza e valida campos
+            const u2 = {
+                ...u,
+                nome: (u.nome || '').trim(),
+                usuario: (u.usuario || '').trim(),
+                senha: (u.senha || '').toString(),
+                perfil: (u.perfil || 'Usuario').trim()
+            };
+            if(!u2.nome || !u2.usuario || !u2.senha) {
+                throw new Error('Preencha Nome, Login e Senha.');
+            }
+
+            const resp = u2.id
+                ? await _db.from('usuarios').update(u2).eq('id', u2.id)
+                : await _db.from('usuarios').insert([u2]);
+
+            if(resp.error) throw resp.error;
+            return resp.data;
+        } catch(err) {
+            // Repassa para o caller mostrar mensagem
+            throw err;
+        }
     },
     async excluirUsuario(id) {
-        return await _db.from('usuarios').delete().eq('id', id);
+        const resp = await _db.from('usuarios').delete().eq('id', id);
+        if(resp.error) throw resp.error;
+        return resp.data;
     },
     async getGrupos() {
         const { data } = await _db.from('ajustes').select('config_json').limit(1).maybeSingle();
@@ -125,7 +148,7 @@ const Backend = {
         const { data } = await _db.from('ajustes').select('id').limit(1).maybeSingle();
         if(data) await _db.from('ajustes').update({config_json: {grupos}}).eq('id', data.id);
         else await _db.from('ajustes').insert([{config_json: {grupos}}]);
-    }
+    },
     // --- FORNECEDORES ---
     async getFornecedores(includeInativos = false) {
         let q = _db.from('fornecedores').select('*').order('nome');
@@ -1005,7 +1028,33 @@ $('btn-processar-xml').onclick = () => {
 $('btnPDFProdutos').onclick = () => html2pdf().set({ margin: 10, filename: 'estoque.pdf' }).from($('tabela-produtos-corpo').parentElement).save();
 $('btnPDFFinanceiro').onclick = () => html2pdf().set({ margin: 10, filename: 'financeiro.pdf' }).from($('tabela-financeiro-corpo').parentElement).save();
 $('btnNovoUsuario').onclick = () => { $('form-usuario').reset(); $('usuario_id_edit').value=''; $('modal-usuario').style.display='block'; };
-$('btn-salvar-usuario').onclick = async (e) => { e.preventDefault(); const u = { id: $('usuario_id_edit').value || undefined, nome: $('user_nome').value, usuario: $('user_login').value, senha: $('user_senha').value, perfil: $('user_perfil').value }; await Backend.salvarUsuario(u); closeModal('modal-usuario'); navegar('usuarios'); };
+$('btn-salvar-usuario').onclick = async (e) => {
+    e.preventDefault();
+    try {
+        const u = {
+            id: $('usuario_id_edit').value || undefined,
+            nome: $('user_nome').value,
+            usuario: $('user_login').value,
+            senha: $('user_senha').value,
+            perfil: $('user_perfil').value
+        };
+        await Backend.salvarUsuario(u);
+        closeModal('modal-usuario');
+        navegar('usuarios');
+        toast('Usuário salvo com sucesso!');
+    } catch(err) {
+        // Mensagens comuns do Supabase
+        const msg = (err && (err.message || err.details)) ? (err.message || err.details) : String(err);
+        // Dica para RLS
+        if(String(msg).toLowerCase().includes('row-level security') || String(msg).toLowerCase().includes('rls') || String(msg).toLowerCase().includes('permission denied')) {
+            toast('Erro ao salvar usuário: permissão negada (RLS). No Supabase, desative RLS na tabela usuarios ou crie uma policy permitindo INSERT/UPDATE.');
+        } else if(String(msg).toLowerCase().includes('duplicate key') || String(msg).toLowerCase().includes('unique')) {
+            toast('Erro ao salvar usuário: esse Login já existe. Use outro login.');
+        } else {
+            toast('Erro ao salvar usuário: ' + msg);
+        }
+    }
+}; await Backend.salvarUsuario(u); closeModal('modal-usuario'); navegar('usuarios'); };
 window.delUser = async (id) => { if(confirm('Excluir?')) { await Backend.excluirUsuario(id); navegar('usuarios'); } };
 window.editUser = (id) => { const u = state.usuarios.find(x => x.id == id); if(!u) return; $('usuario_id_edit').value = u.id; $('user_nome').value = u.nome; $('user_login').value = u.usuario; $('user_senha').value = u.senha; $('user_perfil').value = u.perfil; $('modal-usuario').style.display = 'block'; };
 
