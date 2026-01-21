@@ -18,7 +18,8 @@
         body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
         
         /* TELA LOGIN */
-        #tela-login { display: flex; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, var(--primary), var(--secondary)); }
+        #tela-login { display: flex; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, var(--primary), var(--secondary)); flex-direction: column; }
+        .login-logo { max-width: 300px; margin-bottom: 20px; }
         .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 350px; text-align: center; }
         .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
         .btn-login { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
@@ -87,8 +88,9 @@
 <body>
 
     <div id="tela-login">
+        <img src="https://via.placeholder.com/300x150.png?text=Triboom+Sorvetes+Logo" alt="Triboom Sorvetes Logo" class="login-logo">
         <div class="login-box">
-            <h2>Gestão Simples</h2>
+            <h2>Triboom Sorvetes</h2>
             <input type="text" id="usuario" placeholder="Usuário">
             <input type="password" id="senha" placeholder="Senha">
             <button class="btn-login" id="btnLogin">ENTRAR</button>
