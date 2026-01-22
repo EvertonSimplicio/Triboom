@@ -36,21 +36,28 @@ const Backend = {
         const { data } = await _db.from('usuarios').select('*').eq('usuario', u).eq('senha', s).maybeSingle();
         return data;
     },
+    
+    // --- PRODUTOS ---
     async getProdutos() {
         const { data } = await _db.from('produtos').select('*').order('nome');
         state.produtos = data || [];
         return state.produtos;
     },
     async salvarProduto(p) {
-        if (p.id) return await _db.from('produtos').update(p).eq('id', p.id);
-        return await _db.from('produtos').insert([p]);
+        const query = p.id ? _db.from('produtos').update(p).eq('id', p.id) : _db.from('produtos').insert([p]);
+        const { error } = await query;
+        if(error) throw error;
+        return true;
     },
     async excluirProduto(id) {
-        return await _db.from('produtos').delete().eq('id', id);
+        const { error } = await _db.from('produtos').delete().eq('id', id);
+        if(error) throw error;
+        return true;
     },
     async atualizarEstoqueBatch(itens) {
         for (const item of itens) {
-            await _db.from('produtos').update({ qtd: item.novaQtd }).eq('id', item.id);
+            const { error } = await _db.from('produtos').update({ qtd: item.novaQtd }).eq('id', item.id);
+            if(error) throw error;
         }
         return true;
     },
@@ -68,75 +75,121 @@ const Backend = {
             }
         }
     },
+
+    // --- FINANCEIRO ---
     async getFinanceiro() {
         const { data } = await _db.from('financeiro').select('*').order('data_vencimento', { ascending: false });
         state.financeiro = data || [];
         return state.financeiro;
     },
     async salvarFinanceiro(dados) {
-        if(dados.id) return await _db.from('financeiro').update(dados).eq('id', dados.id);
-        return await _db.from('financeiro').insert(dados);
+        const query = dados.id ? _db.from('financeiro').update(dados).eq('id', dados.id) : _db.from('financeiro').insert(dados);
+        const { error } = await query;
+        if(error) throw error;
+        return true;
     },
     async salvarFinanceiroLote(listaDados) {
-        return await _db.from('financeiro').insert(listaDados);
+        const { error } = await _db.from('financeiro').insert(listaDados);
+        if(error) throw error;
+        return true;
     },
     async excluirFinanceiro(id) {
-        return await _db.from('financeiro').delete().eq('id', id);
+        const { error } = await _db.from('financeiro').delete().eq('id', id);
+        if(error) throw error;
+        return true;
     },
     async baixarLote(ids) {
         const { error } = await _db.from('financeiro').update({ status: 'Pago' }).in('id', ids);
         if(error) throw error;
         return true;
     },
+
+    // --- NOTAS ---
     async getNotas() {
         const { data, error } = await _db.from('notas_entrada').select('*').order('data', { ascending: false });
         state.notas = data || [];
         return state.notas;
     },
     async salvarNota(nota) {
-        if(nota.id) return await _db.from('notas_entrada').update(nota).eq('id', nota.id).select();
-        return await _db.from('notas_entrada').insert([nota]).select();
+        const query = nota.id ? _db.from('notas_entrada').update(nota).eq('id', nota.id) : _db.from('notas_entrada').insert([nota]);
+        const { error } = await query;
+        if(error) throw error;
+        return true;
     },
     async excluirNota(id) {
-        return await _db.from('notas_entrada').delete().eq('id', id);
+        const { error } = await _db.from('notas_entrada').delete().eq('id', id);
+        if(error) throw error;
+        return true;
     },
+
+    // --- USUARIOS ---
     async getUsuarios() {
         const { data } = await _db.from('usuarios').select('*');
         state.usuarios = data || [];
         return state.usuarios;
     },
     async salvarUsuario(u) {
-        if(u.id) return await _db.from('usuarios').update(u).eq('id', u.id);
-        return await _db.from('usuarios').insert([u]);
+        const payload = { ...u };
+        if(!payload.id) delete payload.id;
+        
+        const query = payload.id ? _db.from('usuarios').update(payload).eq('id', payload.id) : _db.from('usuarios').insert([payload]);
+        const { error } = await query;
+        if(error) throw error;
+        return true;
     },
     async excluirUsuario(id) {
-        return await _db.from('usuarios').delete().eq('id', id);
+        const { error } = await _db.from('usuarios').delete().eq('id', id);
+        if(error) throw error;
+        return true;
     },
-    // --- FUNCIONARIOS E FORNECEDORES ---
+
+    // --- FUNCIONARIOS (COM DEBUG DE LEITURA) ---
     async getFuncionarios() {
-        const { data } = await _db.from('funcionarios').select('*').order('nome');
+        const { data, error } = await _db.from('funcionarios').select('*').order('nome');
+        if(error) {
+            console.error("Erro leitura funcionarios:", error);
+            alert("Erro ao ler funcionários: " + error.message + " (Verifique se a tabela existe)");
+            return [];
+        }
         state.funcionarios = data || [];
         return state.funcionarios;
     },
     async salvarFuncionario(f) {
-        if (f.id) return await _db.from('funcionarios').update(f).eq('id', f.id);
-        return await _db.from('funcionarios').insert([f]);
+        const query = f.id ? _db.from('funcionarios').update(f).eq('id', f.id) : _db.from('funcionarios').insert([f]);
+        const { error } = await query;
+        if(error) throw error;
+        return true;
     },
     async excluirFuncionario(id) {
-        return await _db.from('funcionarios').delete().eq('id', id);
+        const { error } = await _db.from('funcionarios').delete().eq('id', id);
+        if(error) throw error;
+        return true;
     },
+
+    // --- FORNECEDORES (COM DEBUG DE LEITURA) ---
     async getFornecedores() {
-        const { data } = await _db.from('fornecedores').select('*').order('nome');
+        const { data, error } = await _db.from('fornecedores').select('*').order('nome');
+        if(error) {
+            console.error("Erro leitura fornecedores:", error);
+            alert("Erro ao ler fornecedores: " + error.message);
+            return [];
+        }
         state.fornecedores = data || [];
         return state.fornecedores;
     },
     async salvarFornecedor(f) {
-        if (f.id) return await _db.from('fornecedores').update(f).eq('id', f.id);
-        return await _db.from('fornecedores').insert([f]);
+        const query = f.id ? _db.from('fornecedores').update(f).eq('id', f.id) : _db.from('fornecedores').insert([f]);
+        const { error } = await query;
+        if(error) throw error;
+        return true;
     },
     async excluirFornecedor(id) {
-        return await _db.from('fornecedores').delete().eq('id', id);
+        const { error } = await _db.from('fornecedores').delete().eq('id', id);
+        if(error) throw error;
+        return true;
     },
+
+    // --- GRUPOS ---
     async getGrupos() {
         const { data } = await _db.from('ajustes').select('config_json').limit(1).maybeSingle();
         state.grupos = data?.config_json?.grupos || [];
@@ -297,12 +350,20 @@ function renderUsuarios(lista) { $('tabela-usuarios-corpo').innerHTML = lista.ma
 function renderGrupos(lista) { $('tabela-config-grupos').innerHTML = lista.map(g => `<tr><td>${g}</td><td><span class="material-icons" style="color:red; cursor:pointer" onclick="delGrupo('${g}')">delete</span></td></tr>`).join(''); }
 
 function renderFuncionarios(lista) {
+    if(!lista || lista.length === 0) {
+        $('tabela-funcionarios-corpo').innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Nenhum funcionário encontrado.</td></tr>';
+        return;
+    }
     $('tabela-funcionarios-corpo').innerHTML = lista.map(f => `<tr>
         <td>${f.nome}</td><td>${f.cargo}</td><td>${f.telefone}</td><td>${f.cpf}</td>
         <td><span class="material-icons" onclick="editarFunc('${f.id}')" style="cursor:pointer">edit</span><span class="material-icons" style="color:red; cursor:pointer" onclick="delFunc('${f.id}')">delete</span></td>
     </tr>`).join('');
 }
 function renderFornecedores(lista) {
+    if(!lista || lista.length === 0) {
+        $('tabela-fornecedores-corpo').innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Nenhum fornecedor encontrado.</td></tr>';
+        return;
+    }
     $('tabela-fornecedores-corpo').innerHTML = lista.map(f => `<tr>
         <td>${f.nome}</td><td>${f.documento}</td><td>${f.telefone}</td><td>${f.cidade}</td>
         <td><span class="material-icons" onclick="editarForn('${f.id}')" style="cursor:pointer">edit</span><span class="material-icons" style="color:red; cursor:pointer" onclick="delForn('${f.id}')">delete</span></td>
@@ -328,11 +389,7 @@ function renderRelatorios() {
     const inicio = new Date(ano, mes - 1, 1); const fim = new Date(ano, mes, 1);
     const finPeriodo = (state.financeiro || []).filter(f => { const d = _toDate(f.data_vencimento); return d && d >= inicio && d < fim; });
     const notasPeriodo = (state.notas || []).filter(n => { const d = _toDate(n.data); return d && d >= inicio && d < fim; });
-    let receitas = 0, despesas = 0; finPeriodo.forEach(i => { const v = parseFloat(i.valor || 0); if(i.tipo === 'Receita' ? rec += v : despesas += v); });
-    finPeriodo.forEach(i => { const v = parseFloat(i.valor || 0); if(i.tipo === 'Receita') {} else {} }); 
-    // CORRIGIDO LOOP ACIMA
-    receitas = 0; despesas = 0; 
-    finPeriodo.forEach(i => { const v = parseFloat(i.valor || 0); if(i.tipo === 'Receita') receitas += v; else despesas += v; });
+    let receitas = 0, despesas = 0; finPeriodo.forEach(i => { const v = parseFloat(i.valor || 0); if(i.tipo === 'Receita') receitas += v; else despesas += v; });
 
     let qtdEstoque = 0, valorEstoque = 0; (state.produtos || []).forEach(p => { const q = parseFloat(p.qtd || 0); const pr = parseFloat(p.preco || 0); qtdEstoque += q; valorEstoque += (q * pr); });
     if($('rel-receitas')) $('rel-receitas').innerText = money(receitas); if($('rel-despesas')) $('rel-despesas').innerText = money(despesas); if($('rel-saldo')) $('rel-saldo').innerText = money(receitas - despesas); if($('rel-estoque-qtd')) $('rel-estoque-qtd').innerText = String(qtdEstoque); if($('rel-estoque-valor')) $('rel-estoque-valor').innerText = money(valorEstoque); if($('rel-notas')) $('rel-notas').innerText = String(notasPeriodo.length);
@@ -367,15 +424,33 @@ window.onclick = (e) => { if(e.target.classList.contains('modal')) e.target.styl
 $('btnAbrirNovoProduto').onclick = () => { $('form-produto').reset(); $('is_edit').value = 'false'; $('prod_id_edit').value = ''; $('modal-produto').style.display = 'block'; setTimeout(() => $('prod_codigo').focus(), 100); };
 $('prod_codigo').addEventListener('keydown', (e) => { if(e.key === "Enter") { e.preventDefault(); $('prod_nome').focus(); } });
 window.editarProd = (id) => { const p = state.produtos.find(x => x.id == id); if(!p) return; $('is_edit').value = 'true'; $('prod_id_edit').value = p.id; $('prod_codigo').value = p.codigo; $('prod_nome').value = p.nome; $('prod_grupo').value = p.grupo; $('prod_qtd').value = p.qtd; $('prod_preco').value = p.preco; $('modal-produto').style.display = 'block'; };
-$('btn-salvar-prod').onclick = async (e) => { e.preventDefault(); const p = { id: $('prod_id_edit').value || undefined, codigo: $('prod_codigo').value, nome: $('prod_nome').value, grupo: $('prod_grupo').value, qtd: parseFloat($('prod_qtd').value), preco: parseFloat($('prod_preco').value) }; await Backend.salvarProduto(p); closeModal('modal-produto'); navegar('produtos'); };
-window.delProd = async (id) => { if(confirm('Excluir?')) { await Backend.excluirProduto(id); navegar('produtos'); } };
+$('btn-salvar-prod').onclick = async (e) => { e.preventDefault(); try { const p = { id: $('prod_id_edit').value || undefined, codigo: $('prod_codigo').value, nome: $('prod_nome').value, grupo: $('prod_grupo').value, qtd: parseFloat($('prod_qtd').value), preco: parseFloat($('prod_preco').value) }; await Backend.salvarProduto(p); closeModal('modal-produto'); navegar('produtos'); } catch(err){ alert("Erro ao salvar produto: "+err.message); } };
+window.delProd = async (id) => { if(confirm('Excluir?')) { try{ await Backend.excluirProduto(id); navegar('produtos'); }catch(err){ alert("Erro: "+err.message); } } };
 
 // --- FUNCIONARIOS ---
 $('btnNovoFuncionario').onclick = () => { $('form-funcionario').reset(); $('func_id_edit').value=''; $('modal-funcionario').style.display='block'; };
 $('btn-salvar-func').onclick = async (e) => {
     e.preventDefault();
-    const f = { id: $('func_id_edit').value || undefined, nome: $('func_nome').value, cargo: $('func_cargo').value, cpf: $('func_cpf').value, telefone: $('func_telefone').value, salario: parseFloat($('func_salario').value), data_admissao: $('func_admissao').value };
-    await Backend.salvarFuncionario(f); closeModal('modal-funcionario'); navegar('funcionarios');
+    try {
+        const id = $('func_id_edit').value;
+        const f = { 
+            nome: $('func_nome').value, 
+            cargo: $('func_cargo').value, 
+            cpf: $('func_cpf').value, 
+            telefone: $('func_telefone').value, 
+            salario: parseFloat($('func_salario').value) || 0, 
+            data_admissao: $('func_admissao').value 
+        };
+        if(id) f.id = id;
+        
+        await Backend.salvarFuncionario(f); 
+        closeModal('modal-funcionario'); 
+        alert('Funcionário salvo com sucesso!');
+        navegar('funcionarios');
+    } catch(err) {
+        console.error(err);
+        alert("Erro ao salvar funcionário: " + (err.message || err.code));
+    }
 };
 window.editarFunc = (id) => {
     const f = state.funcionarios.find(x => x.id == id); if(!f) return;
@@ -388,8 +463,25 @@ window.delFunc = async (id) => { if(confirm('Excluir?')) { await Backend.excluir
 $('btnNovoFornecedor').onclick = () => { $('form-fornecedor').reset(); $('forn_id_edit').value=''; $('modal-fornecedor').style.display='block'; };
 $('btn-salvar-forn').onclick = async (e) => {
     e.preventDefault();
-    const f = { id: $('forn_id_edit').value || undefined, nome: $('forn_nome').value, documento: $('forn_documento').value, telefone: $('forn_telefone').value, email: $('forn_email').value, cidade: $('forn_cidade').value };
-    await Backend.salvarFornecedor(f); closeModal('modal-fornecedor'); navegar('fornecedores');
+    try {
+        const id = $('forn_id_edit').value;
+        const f = { 
+            nome: $('forn_nome').value, 
+            documento: $('forn_documento').value, 
+            telefone: $('forn_telefone').value, 
+            email: $('forn_email').value, 
+            cidade: $('forn_cidade').value 
+        };
+        if(id) f.id = id;
+
+        await Backend.salvarFornecedor(f); 
+        closeModal('modal-fornecedor'); 
+        alert('Fornecedor salvo com sucesso!');
+        navegar('fornecedores');
+    } catch(err) {
+        console.error(err);
+        alert("Erro ao salvar fornecedor: " + (err.message || err.code));
+    }
 };
 window.editarForn = (id) => {
     const f = state.fornecedores.find(x => x.id == id); if(!f) return;
