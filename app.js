@@ -328,7 +328,45 @@ const Backend = {
         const { data } = await _db.from('ajustes').select('id').limit(1).maybeSingle();
         if (data) await _db.from('ajustes').update({ config_json: { grupos } }).eq('id', data.id);
         else await _db.from('ajustes').insert([{ config_json: { grupos } }]);
+    },
+
+    // --- APONTAMENTO (ENTRADA / INTERVALO / SAÍDA) ---
+    async getApontamentoDia(funcionario_id, dataISO) {
+        // dataISO: 'YYYY-MM-DD'
+        const { data, error } = await _db
+            .from('apontamentos')
+            .select('*')
+            .eq('funcionario_id', funcionario_id)
+            .eq('data', dataISO)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (Array.isArray(data) && data.length > 1) {
+            console.warn('⚠️ Encontrados múltiplos apontamentos no dia para o mesmo funcionário. Mantendo o primeiro e sugerindo criar UNIQUE (funcionario_id, data).', data);
+        }
+        return (Array.isArray(data) && data.length > 0) ? data[0] : null;
+    },
+    async criarApontamento(payload) {
+        const { data, error } = await _db
+            .from('apontamentos')
+            .insert([payload])
+            .select('*')
+            .single();
+        if (error) throw error;
+        return data;
+    },
+    async atualizarApontamento(id, patch) {
+        const { data, error } = await _db
+            .from('apontamentos')
+            .update(patch)
+            .eq('id', id)
+            .select('*')
+            .single();
+        if (error) throw error;
+        return data;
     }
+
 };
 
 /* ==========================================================================
@@ -344,7 +382,7 @@ async function navegar(modulo) {
 
     // Esconde todas as views
     ['view-padrao', 'view-usuarios', 'view-produtos', 'view-configuracoes', 'view-notas-entrada',
-        'view-financeiro', 'view-relatorios', 'view-funcionarios', 'view-fornecedores'].forEach(v => {
+        'view-financeiro', 'view-relatorios', 'view-funcionarios', 'view-fornecedores', 'view-apontamento'].forEach(v => {
         const el = $(v); if (el) el.style.display = 'none';
     });
 
@@ -356,6 +394,9 @@ async function navegar(modulo) {
         $('view-financeiro').style.display = 'block';
         injetarControlesFinanceiros();
         renderFinanceiro(await Backend.getFinanceiro());
+    } else if (modulo === 'apontamento') {
+        $('view-apontamento').style.display = 'block';
+        await prepararApontamento();
     } else if (modulo === 'usuarios') {
         $('view-usuarios').style.display = 'block';
         renderUsuarios(await Backend.getUsuarios());
@@ -768,6 +809,249 @@ window.delGrupo = async (g) => { state.grupos = state.grupos.filter(x => x !== g
 async function updateGrupoSelects() { const grps = await Backend.getGrupos(); const opts = grps.map(g => `<option value="${g}">${g}</option>`).join(''); $('prod_grupo').innerHTML = '<option value="">Selecione...</option>' + opts; $('filtro-grupo').innerHTML = '<option value="">Todos</option>' + opts; }
 
 // --- INIT ---
+
+/* ==========================================================================
+   MÓDULO: APONTAMENTO (Entrada / Intervalo / Saída)
+   Requisitos Supabase:
+   - tabela: apontamentos
+   - colunas: id (uuid), funcionario_id (uuid), data (date), entrada (timestamptz),
+              intervalo_inicio (timestamptz), intervalo_fim (timestamptz), saida (timestamptz),
+              observacao (text), usuario_id (uuid), created_at (timestamptz default now())
+   ========================================================================== */
+
+let _apontamentoInit = false;
+let _apontamentoAtual = null;
+
+function _localDateISO() {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+function _fmtHora(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+function _setApStatus(msg) {
+    const el = $('apontamento-status');
+    if (el) el.innerText = msg || '';
+}
+
+function _isFuncionarioAtivo(f) {
+    // Aceita vários padrões de coluna para "ativo"
+    if (!f || typeof f !== 'object') return false;
+
+    if (typeof f.ativo === 'boolean') return f.ativo;
+    if (typeof f.active === 'boolean') return f.active;
+    if (typeof f.habilitado === 'boolean') return f.habilitado;
+
+    // Padrões texto
+    const status = (f.status ?? f.situacao ?? f.estado ?? '').toString().trim().toUpperCase();
+    if (status) {
+        if (['ATIVO', 'ATIVA', 'SIM', 'TRUE', '1'].includes(status)) return true;
+        if (['INATIVO', 'INATIVA', 'NAO', 'NÃO', 'FALSE', '0'].includes(status)) return false;
+    }
+
+    // Se não existir coluna, assume ativo para não sumir da lista
+    return true;
+}
+
+async function prepararApontamento() {
+    // Garante funcionários carregados
+    if (!state.funcionarios || state.funcionarios.length === 0) {
+        await Backend.getFuncionarios();
+    }
+
+    // Se ainda estiver vazio, mostra aviso (tabela pode não existir)
+    const sel = $('apontamento-funcionario');
+    if (!sel) return;
+
+    sel.innerHTML = '';
+
+    // Apenas funcionários ATIVOS na lista de seleção (puxa da tabela funcionarios)
+    const funcionariosAtivos = (state.funcionarios || []).filter(_isFuncionarioAtivo);
+
+    if (!funcionariosAtivos || funcionariosAtivos.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.innerText = 'Nenhum funcionário ativo cadastrado';
+        sel.appendChild(opt);
+        sel.disabled = true;
+        _setApStatus('Cadastre funcionários na tela Funcionários.');
+        return;
+    }
+
+    sel.disabled = false;
+    funcionariosAtivos.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.innerText = f.nome;
+        sel.appendChild(opt);
+    });
+
+    $('apontamento-data').innerText = _localDateISO();
+
+    if (!_apontamentoInit) {
+        _apontamentoInit = true;
+
+        sel.onchange = () => carregarApontamentoDia();
+
+        $('btnApEntrada').onclick = () => acaoApontamento('entrada');
+        $('btnApIntIni').onclick = () => acaoApontamento('intervalo_inicio');
+        $('btnApIntFim').onclick = () => acaoApontamento('intervalo_fim');
+        $('btnApSaida').onclick = () => acaoApontamento('saida');
+    }
+
+    await carregarApontamentoDia();
+}
+
+async function carregarApontamentoDia() {
+    const sel = $('apontamento-funcionario');
+    const funcionarioId = _normId(sel?.value);
+    if (!funcionarioId) return;
+
+    const dataISO = _localDateISO();
+    $('apontamento-data').innerText = dataISO;
+
+    try {
+        _setApStatus('Carregando...');
+        const ap = await Backend.getApontamentoDia(funcionarioId, dataISO);
+        _apontamentoAtual = ap;
+
+        $('apontamento-hora-entrada').innerText = _fmtHora(ap?.entrada);
+        $('apontamento-hora-int-ini').innerText = _fmtHora(ap?.intervalo_inicio);
+        $('apontamento-hora-int-fim').innerText = _fmtHora(ap?.intervalo_fim);
+        $('apontamento-hora-saida').innerText = _fmtHora(ap?.saida);
+
+        if (!ap) {
+            _setApStatus('Nenhum registro hoje. Clique em “Entrada” para iniciar.');
+        } else if (ap.saida) {
+            _setApStatus('Turno finalizado hoje ✅');
+        } else if (ap.intervalo_inicio && !ap.intervalo_fim) {
+            _setApStatus('Em intervalo. Registre “Intervalo (fim)” para continuar.');
+        } else if (ap.entrada && !ap.intervalo_inicio) {
+            _setApStatus('Em trabalho. Se for pausar, registre “Intervalo (início)”, ou registre “Saída”.');
+        } else if (ap.entrada && ap.intervalo_fim && !ap.saida) {
+            _setApStatus('Intervalo finalizado. Registre “Saída” ao terminar.');
+        } else {
+            _setApStatus('');
+        }
+    } catch (e) {
+        console.error(e);
+        _setApStatus('Erro ao carregar apontamento: ' + (e?.message || ''));
+    }
+}
+
+function _validarSequencia(ap, acao) {
+    if (acao === 'entrada') return null;
+
+    if (!ap) return 'Faça a Entrada primeiro.';
+
+    if (acao === 'intervalo_inicio') {
+        if (!ap.entrada) return 'Faça a Entrada primeiro.';
+        if (ap.intervalo_inicio) return 'Intervalo (início) já registrado.';
+        if (ap.saida) return 'Turno já finalizado.';
+        return null;
+    }
+    if (acao === 'intervalo_fim') {
+        if (!ap.intervalo_inicio) return 'Registre Intervalo (início) antes.';
+        if (ap.intervalo_fim) return 'Intervalo (fim) já registrado.';
+        if (ap.saida) return 'Turno já finalizado.';
+        return null;
+    }
+    if (acao === 'saida') {
+        if (!ap.entrada) return 'Faça a Entrada primeiro.';
+        if (ap.saida) return 'Saída já registrada.';
+        if (ap.intervalo_inicio && !ap.intervalo_fim) return 'Finalize o Intervalo (fim) antes da Saída.';
+        return null;
+    }
+    return null;
+}
+
+
+function _normId(v){
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+    return (/^\d+$/.test(s)) ? Number(s) : s;
+}
+
+async function acaoApontamento(acao) {
+    const funcionarioId = _normId($('apontamento-funcionario')?.value);
+    const obs = ($('apontamento-obs')?.value || '').trim();
+    const dataISO = _localDateISO();
+    if (!funcionarioId) return;
+
+    try {
+        _setApStatus('Salvando...');
+        const agora = new Date().toISOString();
+
+        // Recarrega o estado do dia (evita conflito)
+        const ap = await Backend.getApontamentoDia(funcionarioId, dataISO);
+
+        if (acao === 'entrada') {
+            if (ap && ap.entrada && !ap.saida) {
+                _setApStatus('Já existe um turno aberto hoje. Registre Intervalo/Saída nele.');
+                _apontamentoAtual = ap;
+                await carregarApontamentoDia();
+                return;
+            }
+            if (ap && ap.saida) {
+                _setApStatus('Turno já foi finalizado hoje. (Se precisar, ajuste no banco/relatório.)');
+                _apontamentoAtual = ap;
+                await carregarApontamentoDia();
+                return;
+            }
+
+            const payload = {
+                funcionario_id: funcionarioId,
+                data: dataISO,
+                entrada: agora,
+                observacao: obs || null,
+                usuario_id: _normId(state.user?.id)
+            };
+
+            const criado = await Backend.criarApontamento(payload);
+            _apontamentoAtual = criado;
+            _setApStatus('✅ Entrada registrada às ' + _fmtHora(criado.entrada));
+            await carregarApontamentoDia();
+            return;
+        }
+
+        const err = _validarSequencia(ap, acao);
+        if (err) {
+            _setApStatus('⚠️ ' + err);
+            _apontamentoAtual = ap;
+            await carregarApontamentoDia();
+            return;
+        }
+
+        const patch = {};
+        if (acao === 'intervalo_inicio') patch.intervalo_inicio = agora;
+        if (acao === 'intervalo_fim') patch.intervalo_fim = agora;
+        if (acao === 'saida') patch.saida = agora;
+        if (obs) patch.observacao = obs;
+
+        const atualizado = await Backend.atualizarApontamento(ap.id, patch);
+        _apontamentoAtual = atualizado;
+
+        const label = {
+            intervalo_inicio: 'Intervalo (início)',
+            intervalo_fim: 'Intervalo (fim)',
+            saida: 'Saída'
+        }[acao] || acao;
+
+        _setApStatus('✅ ' + label + ' registrado às ' + _fmtHora(agora));
+        await carregarApontamentoDia();
+    } catch (e) {
+        console.error(e);
+        _setApStatus('❌ Erro ao salvar: ' + (e?.message || ''));
+    }
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
     const sess = localStorage.getItem('sess_gestao'); if (sess) { state.user = JSON.parse(sess); initApp(); }
     $('btnLogin').onclick = async () => { const u = await Backend.login($('usuario').value, $('senha').value); if (u) { state.user = u; localStorage.setItem('sess_gestao', JSON.stringify(u)); initApp(); } else $('msg-erro').innerText = 'Erro login'; };
