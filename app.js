@@ -1,8 +1,6 @@
 /* ==========================================================================
    CONFIGURAÇÃO SUPABASE
    ========================================================================== */
-// OBS: As variáveis SUPABASE_URL e SUPABASE_KEY vêm do arquivo config.js
-
 const _db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = (id) => document.getElementById(id);
@@ -18,8 +16,8 @@ let state = {
     financeiro: [],
     notas: [],
     usuarios: [],
-    funcionarios: [],
-    fornecedores: [],
+    funcionarios: [], 
+    fornecedores: [], 
     grupos: [],
     route: 'dashboard',
     tipoFinanceiro: 'Despesa',
@@ -330,7 +328,12 @@ function renderRelatorios() {
     const inicio = new Date(ano, mes - 1, 1); const fim = new Date(ano, mes, 1);
     const finPeriodo = (state.financeiro || []).filter(f => { const d = _toDate(f.data_vencimento); return d && d >= inicio && d < fim; });
     const notasPeriodo = (state.notas || []).filter(n => { const d = _toDate(n.data); return d && d >= inicio && d < fim; });
-    let receitas = 0, despesas = 0; finPeriodo.forEach(i => { const v = parseFloat(i.valor || 0); if(i.tipo === 'Receita') receitas += v; else despesas += v; });
+    let receitas = 0, despesas = 0; finPeriodo.forEach(i => { const v = parseFloat(i.valor || 0); if(i.tipo === 'Receita' ? rec += v : despesas += v); });
+    finPeriodo.forEach(i => { const v = parseFloat(i.valor || 0); if(i.tipo === 'Receita') {} else {} }); 
+    // CORRIGIDO LOOP ACIMA
+    receitas = 0; despesas = 0; 
+    finPeriodo.forEach(i => { const v = parseFloat(i.valor || 0); if(i.tipo === 'Receita') receitas += v; else despesas += v; });
+
     let qtdEstoque = 0, valorEstoque = 0; (state.produtos || []).forEach(p => { const q = parseFloat(p.qtd || 0); const pr = parseFloat(p.preco || 0); qtdEstoque += q; valorEstoque += (q * pr); });
     if($('rel-receitas')) $('rel-receitas').innerText = money(receitas); if($('rel-despesas')) $('rel-despesas').innerText = money(despesas); if($('rel-saldo')) $('rel-saldo').innerText = money(receitas - despesas); if($('rel-estoque-qtd')) $('rel-estoque-qtd').innerText = String(qtdEstoque); if($('rel-estoque-valor')) $('rel-estoque-valor').innerText = money(valorEstoque); if($('rel-notas')) $('rel-notas').innerText = String(notasPeriodo.length);
     const corpoFin = $('rel-financeiro-corpo');
@@ -467,12 +470,10 @@ $('btnSalvarContagem').onclick = async () => { if(state.itensContagem.length ===
 $('btnImportarXML').onclick = () => { $('file-xml').value = ''; $('modal-importar-xml').style.display = 'block'; };
 $('btn-processar-xml').onclick = () => { const file = $('file-xml').files[0]; if(!file) return alert('Selecione um arquivo'); const reader = new FileReader(); reader.onload = async (e) => { const parser = new DOMParser(); const xml = parser.parseFromString(e.target.result, "text/xml"); const nNF = xml.getElementsByTagName("nNF")[0]?.textContent; const xNome = xml.getElementsByTagName("xNome")[0]?.textContent; const vNF = xml.getElementsByTagName("vNF")[0]?.textContent; const itensXML = []; const dets = xml.getElementsByTagName("det"); for(let i=0; i<dets.length; i++) { const prod = dets[i].getElementsByTagName("prod")[0]; if(prod) { const cEAN = prod.getElementsByTagName("cEAN")[0]?.textContent; const cProd = prod.getElementsByTagName("cProd")[0]?.textContent; const codigoFinal = (cEAN && cEAN !== "SEM GTIN" && cEAN.trim() !== "") ? cEAN : cProd; itensXML.push({ codigo: codigoFinal, nome: prod.getElementsByTagName("xProd")[0]?.textContent, qtd: parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent), preco: parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent) }); } } const parcelasXML = []; const dups = xml.getElementsByTagName("dup"); for(let i=0; i<dups.length; i++) { parcelasXML.push({ vencimento: dups[i].getElementsByTagName("dVenc")[0]?.textContent, valor: dups[i].getElementsByTagName("vDup")[0]?.textContent }); } if(nNF) { const notaXML = { numero: nNF, fornecedor: xNome, valor: parseFloat(vNF), tipo: 'XML Importado', data: new Date(), qtd_itens: itensXML.length, itens_json: itensXML, parcelas_xml: parcelasXML }; await Backend.salvarNota(notaXML); try { await Backend.processarEntradaEstoque(itensXML); } catch(e) { console.error(e); } alert(`Nota ${nNF} importada!`); closeModal('modal-importar-xml'); navegar('notas_entrada'); } else alert('XML inválido'); }; reader.readAsText(file); };
 
-// --- PDF & USUARIOS (CORREÇÃO DO BUG DE SALVAR USUARIO) ---
+// --- PDF & USUARIOS ---
 $('btnPDFProdutos').onclick = () => html2pdf().set({ margin: 10, filename: 'estoque.pdf' }).from($('tabela-produtos-corpo').parentElement).save();
 $('btnPDFFinanceiro').onclick = () => html2pdf().set({ margin: 10, filename: 'financeiro.pdf' }).from($('tabela-financeiro-corpo').parentElement).save();
 $('btnNovoUsuario').onclick = () => { $('form-usuario').reset(); $('usuario_id_edit').value=''; $('modal-usuario').style.display='block'; };
-
-// *** AQUI ESTÁ A CORREÇÃO PRINCIPAL ***
 $('btn-salvar-usuario').onclick = async (e) => { 
     e.preventDefault(); 
     try {
@@ -483,7 +484,7 @@ $('btn-salvar-usuario').onclick = async (e) => {
             senha: $('user_senha').value, 
             perfil: $('user_perfil').value 
         }; 
-        if(id) u.id = id; // Só adiciona ID se for edição, senão o Supabase cria sozinho
+        if(id) u.id = id; 
         
         await Backend.salvarUsuario(u); 
         closeModal('modal-usuario'); 
