@@ -85,7 +85,7 @@
 <body>
 
     <div id="tela-login">
-        <img src="Logo.jpg" alt="Triboom Sorvetes" class="login-logo">
+        <img src="imagens/Logo.jpg" alt="Triboom Sorvetes" class="login-logo">
         <div class="login-box">
             <h2>Triboom Sorvetes</h2>
             <input type="text" id="usuario" placeholder="Usuário">
@@ -98,7 +98,7 @@
     <div id="tela-dashboard">
         <nav class="sidebar">
             <div style="text-align: center; padding: 20px 10px;">
-                <img src="Logo.jpg" style="width: 80%; margin-bottom: 10px; border-radius: 10px;">
+                <img src="imagens/Logo.jpg" style="width: 80%; margin-bottom: 10px; border-radius: 10px;">
                 <h2 style="font-size: 1.2rem; background: none; padding:0;">Triboom Sorvetes</h2>
             </div>
             <ul>
@@ -106,7 +106,8 @@
                 <li data-route="produtos"><span class="material-icons">inventory_2</span> Produtos & Estoque</li>
                 <li data-route="notas_entrada"><span class="material-icons">receipt_long</span> Notas de Entrada</li>
                 <li data-route="financeiro"><span class="material-icons">attach_money</span> Financeiro</li>
-                <li data-route="relatorios"><span class="material-icons">bar_chart</span> Relatórios</li>
+                                <li data-route="apontamento"><span class="material-icons">schedule</span> Apontamento</li>
+<li data-route="relatorios"><span class="material-icons">bar_chart</span> Relatórios</li>
                 <li data-route="funcionarios"><span class="material-icons">badge</span> Funcionários</li>
                 <li data-route="fornecedores"><span class="material-icons">local_shipping</span> Fornecedores</li>
                 <li data-route="usuarios"><span class="material-icons">people</span> Usuários</li>
@@ -177,6 +178,31 @@
                     <tbody id="tabela-financeiro-corpo"></tbody>
                 </table>
             </div>
+            <div id="view-apontamento" class="view-section">
+                <div class="toolbar">
+                    <select id="apontamento-funcionario"></select>
+                    <input id="apontamento-obs" placeholder="Observação (opcional)" />
+                    <button class="btn-action btn-add" id="btnApEntrada"><span class="material-icons">login</span> Entrada</button>
+                    <button class="btn-action btn-warning" id="btnApIntIni"><span class="material-icons">pause_circle</span> Intervalo (início)</button>
+                    <button class="btn-action btn-warning" id="btnApIntFim"><span class="material-icons">play_circle</span> Intervalo (fim)</button>
+                    <button class="btn-action btn-danger" id="btnApSaida"><span class="material-icons">logout</span> Saída</button>
+                </div>
+
+                <div class="card-container">
+                    <div class="card">
+                        <h3>Hoje (<span id="apontamento-data"></span>)</h3>
+                        <p id="apontamento-status" style="margin-top: 10px; color:#555;"></p>
+
+                        <div style="margin-top: 10px; font-size: 14px; line-height: 1.7;">
+                            <div><b>Entrada:</b> <span id="apontamento-hora-entrada">-</span></div>
+                            <div><b>Intervalo (início):</b> <span id="apontamento-hora-int-ini">-</span></div>
+                            <div><b>Intervalo (fim):</b> <span id="apontamento-hora-int-fim">-</span></div>
+                            <div><b>Saída:</b> <span id="apontamento-hora-saida">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 
             <div id="view-relatorios" class="view-section">
                 <div class="toolbar">
@@ -188,7 +214,8 @@
                         <option value="financeiro">Detalhado Financeiro</option>
                         <option value="notas">Detalhado Notas</option>
                         <option value="estoque">Estoque Baixo</option>
-                    </select>
+                                            <option value="apontamento">Apontamento</option>
+</select>
                     <button class="btn-action" onclick="navegar('relatorios')"><span class="material-icons">refresh</span> Atualizar</button>
                     <button class="btn-action" onclick="window.print()" style="background:#34495e"><span class="material-icons">print</span> Imprimir</button>
                 </div>
@@ -218,7 +245,50 @@
                     <h3 style="margin-top:25px;">Produtos com Menor Estoque</h3>
                     <table><thead><tr><th>Cód.</th><th>Produto</th><th>Grupo</th><th>Qtd</th></tr></thead><tbody id="rel-baixo-estoque-corpo"></tbody></table>
                 </div>
+            
+            <div id="rel-sec-apontamento" class="section-card" style="display:none;">
+                <h3>Relatório de Apontamento</h3>
+                <div class="toolbar" style="gap:10px; flex-wrap:wrap;">
+                    <div class="form-group" style="min-width:220px;">
+                        <label style="font-size:12px; color:#666;">Funcionário</label>
+                        <select id="rel-apont-funcionario"></select>
+                    </div>
+                    <div class="form-group" style="min-width:160px;">
+                        <label style="font-size:12px; color:#666;">De</label>
+                        <input type="date" id="rel-apont-de" />
+                    </div>
+                    <div class="form-group" style="min-width:160px;">
+                        <label style="font-size:12px; color:#666;">Até</label>
+                        <input type="date" id="rel-apont-ate" />
+                    </div>
+                    <button class="btn-action btn-add" id="btn-rel-apont-buscar" style="height:40px; align-self:flex-end;">Buscar</button>
+                </div>
+
+                <div style="margin-top:10px; display:flex; gap:16px; flex-wrap:wrap;">
+                    <div><b>Total de horas:</b> <span id="rel-apont-total">0:00</span></div>
+                    <div style="color:#999;" id="rel-apont-msg"></div>
+                </div>
+
+                <div style="margin-top:12px; overflow:auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Funcionário</th>
+                                <th>Entrada</th>
+                                <th>Intervalo (início)</th>
+                                <th>Intervalo (fim)</th>
+                                <th>Saída</th>
+                                <th>Horas</th>
+                                <th>Obs.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rel-apont-corpo"></tbody>
+                    </table>
+                </div>
             </div>
+
+</div>
 
             <div id="view-funcionarios" class="view-section">
                 <div class="toolbar">
@@ -346,6 +416,18 @@
                 <div class="form-group"><label>Login</label><input type="text" id="user_login"></div>
                 <div class="form-group"><label>Senha</label><input type="password" id="user_senha"></div>
                 <div class="form-group"><label>Perfil</label><select id="user_perfil"><option value="Admin">Admin</option><option value="Usuario">Usuário</option></select></div>
+                <div class="form-group" style="margin-top:10px;">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="user_eh_funcionario" />
+                        <span>Este usuário é um funcionário</span>
+                    </label>
+                </div>
+                <div class="form-group" id="grp-user-funcionario" style="display:none;">
+                    <label>Vincular ao Funcionário</label>
+                    <select id="user_funcionario_id"></select>
+                    <small style="color:#888;">* Somente funcionários ativos aparecem na lista.</small>
+                </div>
+
                 <div class="actions"><button class="btn-action btn-add" id="btn-salvar-usuario">Salvar</button></div>
             </form>
         </div>
@@ -389,8 +471,6 @@
             </form>
         </div>
     </div>
-
-    <script src="config.js"></script>
-    <script src="app.js"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
