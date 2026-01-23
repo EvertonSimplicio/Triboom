@@ -20,3 +20,7 @@ Abra: http://localhost:8000/Web-App-Triboom-modulos (ou ajuste conforme seu cami
 Publique a pasta do projeto. Módulos funcionam normal.
 
 Obs.: as chaves Supabase estão em `src/config.js`.
+
+//git add .
+git commit -m "Atualização"
+git push//
