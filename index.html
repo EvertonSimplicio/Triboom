@@ -188,6 +188,43 @@
           .header-right span { display: none; } /* deixa só o botão sair */
         }
     
+
+
+        /* ===== Sidebar recolhível (desktop) ===== */
+        .btn-collapse{
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 42px;
+          height: 42px;
+          border: none;
+          border-radius: 10px;
+          background: #eef2f6;
+          color: #2b3a4a;
+          cursor: pointer;
+        }
+        .btn-collapse .material-icons{ margin:0; }
+        @media (max-width: 900px){
+          .btn-collapse{ display:none; }
+        }
+
+        @media (min-width: 901px){
+          #tela-dashboard.sidebar-collapsed .sidebar{ width: 72px; }
+          #tela-dashboard.sidebar-collapsed .sidebar > div{ padding: 14px 8px !important; }
+          #tela-dashboard.sidebar-collapsed .sidebar > div img{ display:none !important; }
+          #tela-dashboard.sidebar-collapsed .sidebar > div h2{ display:none !important; }
+
+          #tela-dashboard.sidebar-collapsed .sidebar li{
+            justify-content:center;
+            padding: 14px 0;
+            font-size: 0; /* esconde o texto */
+          }
+          #tela-dashboard.sidebar-collapsed .sidebar li .material-icons{
+            margin-right: 0;
+            font-size: 24px;
+          }
+        }
+
 </style>
 </head>
 <body>
@@ -229,6 +266,9 @@
                 <div class="header-left">
                     <button class="btn-menu" id="btnMenu" aria-label="Abrir menu">
                         <span class="material-icons">menu</span>
+                    </button>
+                    <button class="btn-collapse" id="btnCollapse" aria-label="Esconder menu lateral">
+                        <span class="material-icons" id="iconCollapse">chevron_left</span>
                     </button>
                     <h2 id="titulo-secao">DASHBOARD</h2>
                 </div>
