@@ -403,6 +403,7 @@
 </select>
                     <button class="btn-action" onclick="navegar('relatorios')"><span class="material-icons">refresh</span> Atualizar</button>
                     <button class="btn-action" onclick="window.print()" style="background:#34495e"><span class="material-icons">print</span> Imprimir</button>
+                    <button class="btn-action" onclick="Relatorios.exportarExcel()" style="background:#1f7a3a"><span class="material-icons">table_view</span> Excel</button>
                 </div>
 
                 <div id="rel-sec-resumo">
@@ -696,6 +697,7 @@
             </form>
         </div>
     </div>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

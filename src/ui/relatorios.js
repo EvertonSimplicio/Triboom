@@ -262,4 +262,69 @@ function aplicarFiltroRelatorioTipo() {
     }
 }
 
-export { prepararRelatorios, renderRelatorios, aplicarFiltroRelatorioTipo, prepararRelatorioApontamentoUI, carregarRelatorioApontamento };
+
+function exportarExcel() {
+  try {
+    if (!window.XLSX) {
+      alert("Exportação para Excel não disponível (biblioteca XLSX não carregou). Verifique sua internet e recarregue a página.");
+      return;
+    }
+
+    const tipo = $('#rel_tipo')?.value || 'todos';
+
+    const sections = [
+      { key: 'resumo', id: 'rel-sec-resumo', sheet: 'Resumo' },
+      { key: 'financeiro', id: 'rel-sec-financeiro', sheet: 'Financeiro' },
+      { key: 'notas', id: 'rel-sec-notas', sheet: 'NotasEntrada' },
+      { key: 'estoque', id: 'rel-sec-estoque', sheet: 'BaixoEstoque' },
+      { key: 'apontamento', id: 'rel-sec-apontamento', sheet: 'Apontamento' },
+    ];
+
+    const wb = window.XLSX.utils.book_new();
+
+    function addSectionToWorkbook(sec) {
+      const el = document.getElementById(sec.id);
+      if (!el) return;
+      const table = el.querySelector('table');
+      if (!table) return;
+
+      // Se a tabela estiver vazia (sem tbody ou sem linhas), ainda exporta cabeçalhos
+      const ws = window.XLSX.utils.table_to_sheet(table, { raw: true });
+      window.XLSX.utils.book_append_sheet(wb, ws, sec.sheet);
+    }
+
+    if (tipo === 'todos') {
+      sections.forEach(addSectionToWorkbook);
+      if (wb.SheetNames.length === 0) {
+        alert("Não encontrei nenhuma tabela para exportar nesta tela.");
+        return;
+      }
+      window.XLSX.writeFile(wb, `relatorios_${new Date().toISOString().slice(0,10)}.xlsx`);
+      return;
+    }
+
+    const sec = sections.find(s => s.key === tipo);
+    if (!sec) {
+      alert("Tipo de relatório inválido para exportação.");
+      return;
+    }
+
+    addSectionToWorkbook(sec);
+    if (wb.SheetNames.length === 0) {
+      alert("Não encontrei uma tabela para exportar neste relatório.");
+      return;
+    }
+
+    window.XLSX.writeFile(wb, `relatorio_${sec.sheet.toLowerCase()}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  } catch (err) {
+    console.error(err);
+    alert("Erro ao exportar Excel: " + (err?.message || err));
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.Relatorios = window.Relatorios || {};
+  window.Relatorios.exportarExcel = exportarExcel;
+}
+
+export { prepararRelatorios, renderRelatorios, aplicarFiltroRelatorioTipo, prepararRelatorioApontamentoUI, carregarRelatorioApontamento, exportarExcel };
