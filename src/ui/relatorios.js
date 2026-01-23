@@ -282,6 +282,29 @@ function exportarExcel() {
 
     const wb = window.XLSX.utils.book_new();
 
+	    // O relatório "Resumo" não é uma tabela: são cards/indicadores.
+	    // Para exportação, montamos uma planilha simples (Indicador x Valor).
+	    function addResumoKPIs() {
+	      const kpis = [
+	        { label: 'Receitas', id: 'rel-receitas' },
+	        { label: 'Despesas', id: 'rel-despesas' },
+	        { label: 'Saldo', id: 'rel-saldo' },
+	        { label: 'Qtd em Estoque', id: 'rel-qtd-estoque' },
+	        { label: 'Valor do Estoque', id: 'rel-valor-estoque' },
+	        { label: 'Notas do Mês', id: 'rel-notas-mes' },
+	      ];
+
+	      const rows = [['Indicador', 'Valor']];
+	      for (const k of kpis) {
+	        const el = document.getElementById(k.id);
+	        const valor = (el?.textContent || '').trim();
+	        rows.push([k.label, valor]);
+	      }
+
+	      const ws = window.XLSX.utils.aoa_to_sheet(rows);
+	      window.XLSX.utils.book_append_sheet(wb, ws, 'Resumo');
+	    }
+
     function addSectionToWorkbook(sec) {
       const el = document.getElementById(sec.id);
       if (!el) return;
@@ -293,13 +316,17 @@ function exportarExcel() {
       window.XLSX.utils.book_append_sheet(wb, ws, sec.sheet);
     }
 
+    // Exporta APENAS o relatório selecionado no filtro.
+    // No filtro da tela, "Visão Geral" usa value="todos" (para exibir tudo),
+    // mas na exportação queremos somente o Resumo (cards/indicadores).
+    const hoje = new Date().toISOString().slice(0, 10);
     if (tipo === 'todos') {
-      sections.forEach(addSectionToWorkbook);
+      addResumoKPIs();
       if (wb.SheetNames.length === 0) {
-        alert("Não encontrei nenhuma tabela para exportar nesta tela.");
+        alert("Não encontrei dados do Resumo para exportar.");
         return;
       }
-      window.XLSX.writeFile(wb, `relatorios_${new Date().toISOString().slice(0,10)}.xlsx`);
+      window.XLSX.writeFile(wb, `relatorio_visao_geral_${hoje}.xlsx`);
       return;
     }
 
@@ -309,7 +336,11 @@ function exportarExcel() {
       return;
     }
 
-    addSectionToWorkbook(sec);
+	    if (sec.key === 'resumo') {
+	      addResumoKPIs();
+	    } else {
+	      addSectionToWorkbook(sec);
+	    }
     if (wb.SheetNames.length === 0) {
       alert("Não encontrei uma tabela para exportar neste relatório.");
       return;
