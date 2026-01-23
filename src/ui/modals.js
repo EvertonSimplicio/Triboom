@@ -309,7 +309,8 @@ export function initModals() {
 
   const abrirTrocarSenha = () => {
     if (!modalTrocarSenha) return;
-    const u = State.usuarioLogado || {};
+  // Usuário logado fica em `state.user` (src/state.js)
+  const u = state.user || {};
     const elNome = document.getElementById('ts-nome');
     const elLogin = document.getElementById('ts-login');
     const elAtual = document.getElementById('ts-atual');
@@ -381,7 +382,11 @@ export function initModals() {
       }
 
       try {
-        const ok = await Backend.trocarSenhaUsuario(State.usuarioLogado.id, senhaAtual, senhaNova);
+        if (!state.user || !state.user.id) {
+          alert('Não foi possível identificar o usuário logado. Faça login novamente.');
+          return;
+        }
+        const ok = await Backend.trocarSenhaUsuario(state.user.id, senhaAtual, senhaNova);
         if (!ok) {
           alert('Senha atual incorreta.');
           return;
