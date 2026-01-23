@@ -303,6 +303,7 @@ export function initModals() {
 
   // --- TROCAR SENHA (usuário logado) ---
   const btnPerfilUsuario = document.getElementById('btn-perfil-usuario');
+  const btnPerfilUsuarioMobile = document.getElementById('btn-perfil-usuario-mobile');
   const modalTrocarSenha = document.getElementById('modal-trocar-senha');
   const fecharTrocarSenha = document.getElementById('fechar-modal-trocar-senha');
   const formTrocarSenha = document.getElementById('form-trocar-senha');
@@ -330,6 +331,17 @@ export function initModals() {
   if (btnPerfilUsuario && modalTrocarSenha) {
     btnPerfilUsuario.addEventListener('click', abrirTrocarSenha);
     btnPerfilUsuario.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        abrirTrocarSenha();
+      }
+    });
+  }
+
+  // No mobile o texto "Olá, Nome" pode ficar oculto pelo CSS; então usamos um botão de conta.
+  if (btnPerfilUsuarioMobile && modalTrocarSenha) {
+    btnPerfilUsuarioMobile.addEventListener('click', abrirTrocarSenha);
+    btnPerfilUsuarioMobile.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         abrirTrocarSenha();

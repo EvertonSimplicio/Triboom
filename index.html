@@ -88,6 +88,22 @@
         .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
         .header-right { display: flex; align-items: center; gap: 12px; }
 
+        /* Botão de conta (mobile) - aparece quando o texto "Olá, Nome" é ocultado */
+        .btn-user-mobile{
+          display: none;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 44px;
+          border: 0;
+          border-radius: 12px;
+          background: rgba(255,255,255,0.92);
+          box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+          cursor: pointer;
+          padding: 0;
+        }
+        .btn-user-mobile .material-icons{ font-size: 26px; color: #1f2f3e; }
+
         /* melhora toque em inputs/botoes */
         input, select, button { min-height: 44px; }
 
@@ -185,7 +201,8 @@
         @media (max-width: 420px) {
           .main-content { padding: 10px; }
           #titulo-secao { font-size: 1.05rem; }
-          .header-right span { display: none; } /* deixa só o botão sair */
+          .header-right span { display: none; } /* esconde "Olá, Nome" para economizar espaço */
+          .btn-user-mobile { display: inline-flex; } /* mostra botão de conta */
         }
     
 
@@ -274,6 +291,11 @@
                 </div>
                 <div class="header-right" style="display: flex; align-items: center; gap: 15px;">
                     <span id="btn-perfil-usuario" class="user-greeting" role="button" tabindex="0">Olá, <b id="display-nome-usuario">Usuário</b></span>
+                    <!-- No celular o texto "Olá, Nome" pode ficar oculto para caber no topo.
+                         Por isso mostramos um botão de perfil (ícone) que abre o mesmo modal de troca de senha. -->
+                    <button id="btn-perfil-usuario-mobile" class="btn-user-mobile" type="button" title="Minha conta" aria-label="Minha conta">
+                      <span class="material-icons">account_circle</span>
+                    </button>
                     <button class="btn-sair" id="btnSair">Sair</button>
                 </div>
             </div>
