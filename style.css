@@ -90,3 +90,8 @@ header { background: white; padding: 15px 30px; box-shadow: 0 2px 5px rgba(0,0,0
 /* Clique no nome do usuário (topbar) para abrir troca de senha */
 .user-greeting{cursor:pointer; user-select:none;}
 .user-greeting:hover{text-decoration:underline;}
+
+
+/* Nome do usuário clicável para trocar senha */
+#btn-perfil-usuario{cursor:pointer; position:relative; z-index:5;}
+#btn-perfil-usuario:hover b{ text-decoration: underline; }

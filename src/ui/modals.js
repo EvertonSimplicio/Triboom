@@ -336,6 +336,16 @@ export function initModals() {
     });
   }
 
+  // Também torna o nome clicável (alguns navegadores/estilos podem capturar o clique apenas no <b>)
+  const nomeUsuarioHeader = $('display-nome-usuario');
+  if (nomeUsuarioHeader && modalTrocarSenha) {
+    nomeUsuarioHeader.style.cursor = 'pointer';
+    nomeUsuarioHeader.addEventListener('click', (e) => {
+      e.preventDefault();
+      abrirTrocarSenha();
+    });
+  }
+
   if (fecharTrocarSenha && modalTrocarSenha) {
     fecharTrocarSenha.addEventListener('click', () => {
       modalTrocarSenha.style.display = 'none';
