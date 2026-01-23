@@ -103,7 +103,39 @@ async function _upsertWithSchemaFallback(table, payload, id, mappingRules = {}) 
    ========================================================================== */
 const Backend = {
     async login(u, s) {
-        const { data } = await _db.from('usuarios').select('*').eq('usuario', u).eq('senha', s).maybeSingle();
+        const userInput = (u ?? '').toString().trim();
+        const passInput = (s ?? '').toString();
+
+        if (!userInput || !passInput) return null;
+
+        // 1) tenta por "usuario" (case-insensitive)
+        let { data, error } = await _db
+            .from('usuarios')
+            .select('*')
+            .ilike('usuario', userInput)
+            .eq('senha', passInput)
+            .maybeSingle();
+
+        // 2) fallback: tenta por "nome" (case-insensitive) caso o usuário digite o nome
+        if (!data && !error) {
+            ({ data, error } = await _db
+                .from('usuarios')
+                .select('*')
+                .ilike('nome', userInput)
+                .eq('senha', passInput)
+                .maybeSingle());
+        }
+
+        if (error) throw error;
+        if (!data) return null;
+
+        // Se existir controle de ativo, bloqueia login de usuários desativados
+        if (data.ativo === false) {
+            const err = new Error('Usuário desativado.');
+            err.code = 'USER_DISABLED';
+            throw err;
+        }
+
         return data;
     },
 
@@ -347,7 +379,23 @@ const Backend = {
         }
         return (Array.isArray(data) && data.length > 0) ? data[0] : null;
     },
-    async criarApontamento(payload) {
+    
+    async getApontamentosPeriodo({ de, ate, funcionario_id = null }) {
+        // de/ate: 'YYYY-MM-DD'
+        let q = _db
+            .from('apontamentos')
+            .select('id, funcionario_id, data, entrada, intervalo_inicio, intervalo_fim, saida, observacao, usuario_id, created_at, funcionarios(nome)')
+            .gte('data', de)
+            .lte('data', ate)
+            .order('data', { ascending: true });
+
+        if (funcionario_id) q = q.eq('funcionario_id', funcionario_id);
+
+        const { data, error } = await q;
+        if (error) throw error;
+        return data || [];
+    },
+async criarApontamento(payload) {
         const { data, error } = await _db
             .from('apontamentos')
             .insert([payload])
@@ -564,15 +612,45 @@ function renderFornecedores(lista) {
 // RELATORIOS
 function _toDate(value) { if (!value) return null; if (typeof value === 'string' && value.length === 10) return new Date(value + 'T00:00:00'); return new Date(value); }
 async function prepararRelatorios() {
-    if (state.produtos.length === 0) await Backend.getProdutos(); if (state.financeiro.length === 0) await Backend.getFinanceiro(); if (state.notas.length === 0) await Backend.getNotas();
-    const selMes = $('rel_mes'); const selAno = $('rel_ano'); if (!selMes || !selAno) return;
+    if (state.produtos.length === 0) await Backend.getProdutos();
+    if (state.financeiro.length === 0) await Backend.getFinanceiro();
+    if (state.notas.length === 0) await Backend.getNotas();
+
+    const selMes = $('rel_mes');
+    const selAno = $('rel_ano');
+    if (!selMes || !selAno) return;
+
     if (selMes.options.length === 0) {
         const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         selMes.innerHTML = meses.map((m, idx) => `<option value="${idx + 1}">${m}</option>`).join('');
-        const anoAtual = new Date().getFullYear(); const anos = []; for (let a = anoAtual - 4; a <= anoAtual + 1; a++) anos.push(a);
+        const anoAtual = new Date().getFullYear();
+        const anos = [];
+        for (let a = anoAtual - 4; a <= anoAtual + 1; a++) anos.push(a);
         selAno.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
-        selMes.value = String(new Date().getMonth() + 1); selAno.value = String(anoAtual);
+        selMes.value = String(new Date().getMonth() + 1);
+        selAno.value = String(anoAtual);
     }
+
+    // liga eventos (uma vez)
+    const selTipo = $('rel_tipo');
+    if (selTipo && !selTipo.dataset.bound) {
+        selTipo.dataset.bound = '1';
+        selTipo.onchange = () => {
+            aplicarFiltroRelatorioTipo();
+            if ((selTipo.value || '').toLowerCase() === 'apontamento') prepararRelatorioApontamentoUI();
+        };
+    }
+    if (selMes && !selMes.dataset.bound) {
+        selMes.dataset.bound = '1';
+        selMes.onchange = () => { renderRelatorios(); };
+    }
+    if (selAno && !selAno.dataset.bound) {
+        selAno.dataset.bound = '1';
+        selAno.onchange = () => { renderRelatorios(); };
+    }
+
+    // prepara UI do relatório de apontamento (select + datas + botão)
+    await prepararRelatorioApontamentoUI();
 }
 function renderRelatorios() {
     const selMes = $('rel_mes'); const selAno = $('rel_ano');
@@ -593,15 +671,170 @@ function renderRelatorios() {
     const corpoBaixo = $('rel-baixo-estoque-corpo');
     if (corpoBaixo) { const low = (state.produtos || []).slice().sort((a, b) => parseFloat(a.qtd || 0) - parseFloat(b.qtd || 0)).slice(0, 15); corpoBaixo.innerHTML = low.map(p => `<tr><td><b>${p.codigo}</b></td><td>${p.nome}</td><td>${p.grupo || '-'}</td><td><b>${p.qtd}</b></td></tr>`).join('') || `<tr><td colspan="4" style="text-align:center; color:#999;">Sem produtos</td></tr>`; }
 }
+
+// --- RELATÓRIO APONTAMENTO ---
+let _relApInit = false;
+
+function _hmFromMinutes(min) {
+    const m = Math.max(0, Math.round(min || 0));
+    const h = Math.floor(m / 60);
+    const mm = String(m % 60).padStart(2, '0');
+    return `${h}:${mm}`;
+}
+
+function _minDiff(a, b) {
+    if (!a || !b) return 0;
+    const ta = new Date(a).getTime();
+    const tb = new Date(b).getTime();
+    return (tb - ta) / 60000;
+}
+
+function _calcMinTrabalhado(ap) {
+    const total = _minDiff(ap.entrada, ap.saida);
+    const intervalo = _minDiff(ap.intervalo_inicio, ap.intervalo_fim);
+    return Math.max(0, total - intervalo);
+}
+
+function _fmtHoraCurta(ts) { return ts ? new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-'; }
+
+function _setRelApMsg(txt) { const el = $('rel-apont-msg'); if (el) el.innerText = txt || ''; }
+
+async function prepararRelatorioApontamentoUI() {
+    const sel = $('rel-apont-funcionario');
+    const de = $('rel-apont-de');
+    const ate = $('rel-apont-ate');
+    const btn = $('btn-rel-apont-buscar');
+
+    if (!sel || !de || !ate || !btn) return;
+
+    // Garante funcionários carregados
+    if (!state.funcionarios || state.funcionarios.length === 0) {
+        await Backend.getFuncionarios();
+    }
+
+    // Preenche select com ativos
+    sel.innerHTML = '';
+    const optAll = document.createElement('option');
+    optAll.value = '';
+    optAll.innerText = 'Todos os funcionários';
+    sel.appendChild(optAll);
+
+    (state.funcionarios || []).filter(_isFuncionarioAtivo).forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.innerText = f.nome;
+        sel.appendChild(opt);
+    });
+
+    // Defaults: mês atual
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const first = new Date(y, m, 1);
+    const last = new Date(y, m + 1, 0);
+
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    if (!de.value) de.value = iso(first);
+    if (!ate.value) ate.value = iso(last);
+
+    // Se for usuário (funcionário) vinculado, trava para ele mesmo
+    const isUser = (String(state.user?.perfil || '').toLowerCase() === 'usuario');
+    const myFunc = state.user?.funcionario_id;
+    if (isUser && myFunc) {
+        sel.value = myFunc;
+        sel.disabled = true;
+    }
+
+    if (!_relApInit) {
+        _relApInit = true;
+        btn.onclick = async (e) => { e.preventDefault(); await carregarRelatorioApontamento(); };
+    }
+}
+
+async function carregarRelatorioApontamento() {
+    const sel = $('rel-apont-funcionario');
+    const de = $('rel-apont-de');
+    const ate = $('rel-apont-ate');
+    const corpo = $('rel-apont-corpo');
+    const totalEl = $('rel-apont-total');
+
+    if (!sel || !de || !ate || !corpo || !totalEl) return;
+
+    const deISO = de.value;
+    const ateISO = ate.value;
+
+    if (!deISO || !ateISO) { _setRelApMsg('Selecione o período.'); return; }
+
+    let funcionarioId = sel.value ? _normId(sel.value) : null;
+
+    // Se for usuário comum e estiver vinculado, força o próprio
+    const isUser = (String(state.user?.perfil || '').toLowerCase() === 'usuario');
+    const myFunc = state.user?.funcionario_id;
+    if (isUser && myFunc) funcionarioId = _normId(myFunc);
+
+    try {
+        _setRelApMsg('Carregando...');
+        corpo.innerHTML = '';
+
+        const lista = await Backend.getApontamentosPeriodo({ de: deISO, ate: ateISO, funcionario_id: funcionarioId });
+
+        let totalMin = 0;
+        const rows = (lista || []).map(ap => {
+            const mins = _calcMinTrabalhado(ap);
+            if (ap.saida) totalMin += mins;
+
+            const nomeFunc = ap.funcionarios?.nome || ap.funcionario_nome || '-';
+
+            return `<tr>
+                <td>${ap.data || '-'}</td>
+                <td>${nomeFunc}</td>
+                <td>${_fmtHoraCurta(ap.entrada)}</td>
+                <td>${_fmtHoraCurta(ap.intervalo_inicio)}</td>
+                <td>${_fmtHoraCurta(ap.intervalo_fim)}</td>
+                <td>${_fmtHoraCurta(ap.saida)}</td>
+                <td>${ap.saida ? _hmFromMinutes(mins) : '-'}</td>
+                <td>${(ap.observacao || '').replace(/</g,'&lt;')}</td>
+            </tr>`;
+        }).join('');
+
+        corpo.innerHTML = rows || `<tr><td colspan="8" style="text-align:center; color:#999;">Sem dados no período</td></tr>`;
+        totalEl.innerText = _hmFromMinutes(totalMin);
+
+        _setRelApMsg('');
+    } catch (e) {
+        console.error(e);
+        _setRelApMsg('Erro ao carregar: ' + (e.message || e));
+    }
+}
+
+
 function aplicarFiltroRelatorioTipo() {
-    const tipo = ($('rel_tipo')?.value || 'todos').toLowerCase(); const secResumo = $('rel-sec-resumo'); const cardsFin = $('rel-cards-fin'); const cardsEst = $('rel-cards-estoque'); const secFin = $('rel-sec-financeiro'); const secNotas = $('rel-sec-notas'); const secBaixo = $('rel-sec-baixo-estoque');
+    const tipo = ($('rel_tipo')?.value || 'todos').toLowerCase();
+    const secResumo = $('rel-sec-resumo');
+    const cardsFin = $('rel-cards-fin');
+    const cardsEst = $('rel-cards-estoque');
+    const secFin = $('rel-sec-financeiro');
+    const secNotas = $('rel-sec-notas');
+    const secBaixo = $('rel-sec-baixo-estoque');
+    const secApont = $('rel-sec-apontamento');
+
     const show = (el, yes) => { if (el) el.style.display = yes ? 'block' : 'none'; };
+
+    // padrão: mostra tudo
     show(secResumo, true); show(cardsFin, true); show(cardsEst, true); show(secFin, true); show(secNotas, true); show(secBaixo, true);
+    show(secApont, false);
+
     if (tipo === 'todos') return;
     if (tipo === 'resumo') { show(secFin, false); show(secNotas, false); show(secBaixo, false); return; }
     if (tipo === 'financeiro') { show(cardsEst, false); show(secNotas, false); show(secBaixo, false); show(secFin, true); return; }
     if (tipo === 'notas') { show(cardsFin, false); show(secFin, false); show(secBaixo, false); show(secNotas, true); return; }
     if (tipo === 'estoque') { show(cardsFin, false); show(secFin, false); show(secNotas, false); show(secBaixo, true); return; }
+    if (tipo === 'apontamento') {
+        show(secResumo, false); show(cardsFin, false); show(cardsEst, false); show(secFin, false); show(secNotas, false); show(secBaixo, false);
+        show(secApont, true);
+        return;
+    }
 }
 
 
@@ -778,7 +1011,72 @@ $('btn-processar-xml').onclick = () => { const file = $('file-xml').files[0]; if
 // --- PDF & USUARIOS ---
 $('btnPDFProdutos').onclick = () => html2pdf().set({ margin: 10, filename: 'estoque.pdf' }).from($('tabela-produtos-corpo').parentElement).save();
 $('btnPDFFinanceiro').onclick = () => html2pdf().set({ margin: 10, filename: 'financeiro.pdf' }).from($('tabela-financeiro-corpo').parentElement).save();
-$('btnNovoUsuario').onclick = () => { $('form-usuario').reset(); $('usuario_id_edit').value = ''; $('modal-usuario').style.display = 'block'; };
+
+async function preencherSelectFuncionarioUsuario(selectedId = null) {
+    const chk = $('user_eh_funcionario');
+    const grp = $('grp-user-funcionario');
+    const sel = $('user_funcionario_id');
+    if (!chk || !grp || !sel) return;
+
+    // bind toggle 1x
+    if (!chk.dataset.bound) {
+        chk.dataset.bound = '1';
+        chk.onchange = async () => {
+            grp.style.display = chk.checked ? 'block' : 'none';
+            if (chk.checked) await preencherSelectFuncionarioUsuario(sel.value || null);
+        };
+    }
+
+    // se não estiver marcado, só esconde e limpa
+    if (!chk.checked) {
+        grp.style.display = 'none';
+        sel.innerHTML = '';
+        return;
+    }
+
+    // carrega funcionarios se necessário
+    if (!state.funcionarios || state.funcionarios.length === 0) {
+        await Backend.getFuncionarios();
+    }
+
+    const ativos = (state.funcionarios || []).filter(_isFuncionarioAtivo);
+
+    sel.innerHTML = '';
+    if (!ativos || ativos.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.innerText = 'Nenhum funcionário ativo cadastrado';
+        sel.appendChild(opt);
+        sel.disabled = true;
+        return;
+    }
+
+    sel.disabled = false;
+
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.innerText = 'Selecione...';
+    sel.appendChild(opt0);
+
+    ativos.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.innerText = f.nome;
+        sel.appendChild(opt);
+    });
+
+    if (selectedId) sel.value = selectedId;
+}
+
+$('btnNovoUsuario').onclick = async () => {
+    $('form-usuario').reset();
+    $('usuario_id_edit').value = '';
+    // padrão: não é funcionário
+    if ($('user_eh_funcionario')) $('user_eh_funcionario').checked = false;
+    if ($('grp-user-funcionario')) $('grp-user-funcionario').style.display = 'none';
+    await preencherSelectFuncionarioUsuario();
+    $('modal-usuario').style.display = 'block';
+};
 $('btn-salvar-usuario').onclick = async (e) => {
     e.preventDefault();
     try {
@@ -789,6 +1087,14 @@ $('btn-salvar-usuario').onclick = async (e) => {
             senha: $('user_senha').value,
             perfil: $('user_perfil').value
         };
+        // vínculo com funcionário (opcional)
+        const ehFunc = $('user_eh_funcionario')?.checked;
+        if (ehFunc) {
+            u.funcionario_id = $('user_funcionario_id')?.value || null;
+        } else {
+            u.funcionario_id = null;
+        }
+
         if (id) u.id = id;
 
         await Backend.salvarUsuario(u);
@@ -801,7 +1107,24 @@ $('btn-salvar-usuario').onclick = async (e) => {
 };
 
 window.delUser = async (id) => { if (confirm('Excluir?')) { await Backend.excluirUsuario(id); navegar('usuarios'); } };
-window.editUser = (id) => { const u = state.usuarios.find(x => x.id == id); if (!u) return; $('usuario_id_edit').value = u.id; $('user_nome').value = u.nome; $('user_login').value = u.usuario; $('user_senha').value = u.senha; $('user_perfil').value = u.perfil; $('modal-usuario').style.display = 'block'; };
+window.editUser = async (id) => {
+    const u = state.usuarios.find(x => x.id == id);
+    if (!u) return;
+
+    $('usuario_id_edit').value = u.id;
+    $('user_nome').value = u.nome;
+    $('user_login').value = u.usuario;
+    $('user_senha').value = u.senha;
+    $('user_perfil').value = u.perfil;
+
+    const temVinculo = !!u.funcionario_id;
+    if ($('user_eh_funcionario')) $('user_eh_funcionario').checked = temVinculo;
+    if ($('grp-user-funcionario')) $('grp-user-funcionario').style.display = temVinculo ? 'block' : 'none';
+
+    await preencherSelectFuncionarioUsuario(temVinculo ? u.funcionario_id : null);
+
+    $('modal-usuario').style.display = 'block';
+};
 
 // --- CONFIG ---
 $('btnAddGrupo').onclick = async () => { const g = $('novo-grupo-nome').value; if (g && !state.grupos.includes(g)) { state.grupos.push(g); await Backend.saveGrupos(state.grupos); navegar('configuracoes'); } };
@@ -1035,7 +1358,101 @@ async function acaoApontamento(acao) {
         if (obs) patch.observacao = obs;
 
         const atualizado = await Backend.atualizarApontamento(ap.id, patch);
-        _apontamentoAtual = atualizado;
+        async function prepararApontamento() {
+    // Garante funcionários carregados
+    if (!state.funcionarios || state.funcionarios.length === 0) {
+        await Backend.getFuncionarios();
+    }
+
+    const sel = $('apontamento-funcionario');
+    if (!sel) return;
+
+    const setBtnsDisabled = (yes) => {
+        ['btnApEntrada', 'btnApIntIni', 'btnApIntFim', 'btnApSaida'].forEach(id => {
+            const b = $(id); if (b) b.disabled = !!yes;
+        });
+    };
+
+    sel.innerHTML = '';
+
+    // Apenas ATIVOS
+    const funcionariosAtivos = (state.funcionarios || []).filter(_isFuncionarioAtivo);
+
+    const isUser = (String(state.user?.perfil || '').toLowerCase() === 'usuario');
+    const myFunc = state.user?.funcionario_id;
+
+    if (!funcionariosAtivos || funcionariosAtivos.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.innerText = 'Nenhum funcionário ativo cadastrado';
+        sel.appendChild(opt);
+        sel.disabled = true;
+        setBtnsDisabled(true);
+        _setApStatus('Cadastre funcionários na tela Funcionários.');
+        return;
+    }
+
+    if (isUser) {
+        // Funcionário: só pode lançar para si mesmo
+        if (!myFunc) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.innerText = 'Usuário sem funcionário vinculado';
+            sel.appendChild(opt);
+            sel.disabled = true;
+            setBtnsDisabled(true);
+            _setApStatus('Seu usuário não está vinculado a um funcionário. Peça ao Admin para vincular em Usuários.');
+            return;
+        }
+
+        const f = funcionariosAtivos.find(x => String(x.id) === String(myFunc));
+        if (!f) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.innerText = 'Funcionário vinculado inativo/inexistente';
+            sel.appendChild(opt);
+            sel.disabled = true;
+            setBtnsDisabled(true);
+            _setApStatus('O funcionário vinculado está inativo (ou não existe). Peça ao Admin para ajustar.');
+            return;
+        }
+
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.innerText = f.nome;
+        sel.appendChild(opt);
+        sel.value = f.id;
+        sel.disabled = true;
+        setBtnsDisabled(false);
+    } else {
+        // Admin: lista todos ativos
+        sel.disabled = false;
+        funcionariosAtivos.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f.id;
+            opt.innerText = f.nome;
+            sel.appendChild(opt);
+        });
+        setBtnsDisabled(false);
+    }
+
+    $('apontamento-data').innerText = _localDateISO();
+
+    if (!_apontamentoInit) {
+        _apontamentoInit = true;
+
+        sel.onchange = () => carregarApontamentoDia();
+
+        $('btnApEntrada').onclick = () => acaoApontamento('entrada');
+        $('btnApIntIni').onclick = () => acaoApontamento('intervalo_inicio');
+        $('btnApIntFim').onclick = () => acaoApontamento('intervalo_fim');
+        $('btnApSaida').onclick = () => acaoApontamento('saida');
+    }
+
+    await carregarApontamentoDia();
+}
+
+async function carregarApontamentoDiaontamentoAtual = atualizado;
 
         const label = {
             intervalo_inicio: 'Intervalo (início)',
@@ -1054,7 +1471,22 @@ async function acaoApontamento(acao) {
 
 document.addEventListener('DOMContentLoaded', () => {
     const sess = localStorage.getItem('sess_gestao'); if (sess) { state.user = JSON.parse(sess); initApp(); }
-    $('btnLogin').onclick = async () => { const u = await Backend.login($('usuario').value, $('senha').value); if (u) { state.user = u; localStorage.setItem('sess_gestao', JSON.stringify(u)); initApp(); } else $('msg-erro').innerText = 'Erro login'; };
+    $('btnLogin').onclick = async () => {
+        const msg = $('msg-erro');
+        msg.innerText = '';
+        try {
+            const u = await Backend.login($('usuario').value, $('senha').value);
+            if (u) {
+                state.user = u;
+                localStorage.setItem('sess_gestao', JSON.stringify(u));
+                initApp();
+            } else {
+                msg.innerText = 'Usuário ou senha inválidos.';
+            }
+        } catch (e) {
+            msg.innerText = (e && e.message) ? e.message : 'Erro ao entrar.';
+        }
+    };
     $('btnSair').onclick = () => { localStorage.removeItem('sess_gestao'); location.reload(); };
     document.querySelectorAll('.close').forEach(b => b.onclick = function () { this.closest('.modal').style.display = 'none'; });
     document.querySelectorAll('.sidebar li').forEach(li => li.onclick = () => navegar(li.dataset.route));
@@ -1062,4 +1494,34 @@ document.addEventListener('DOMContentLoaded', () => {
     $('barra-pesquisa-financeiro').onkeyup = () => renderFinanceiro(state.financeiro);
 });
 
-function initApp() { $('tela-login').style.display = 'none'; $('tela-dashboard').style.display = 'flex'; $('display-nome-usuario').innerText = state.user.nome; navegar('dashboard'); }
+
+function aplicarPermissoesUI() {
+    const perfil = String(state.user?.perfil || '').toLowerCase();
+
+    // Usuário (funcionário): só pode lançar apontamento
+    if (perfil === 'usuario') {
+        document.querySelectorAll('.sidebar li').forEach(li => {
+            const r = (li.dataset.route || '').toLowerCase();
+            // mantém apenas apontamento
+            li.style.display = (r === 'apontamento') ? 'flex' : 'none';
+        });
+    } else {
+        // Admin: mostra tudo
+        document.querySelectorAll('.sidebar li').forEach(li => li.style.display = 'flex');
+    }
+}
+
+function initApp() {
+    $('tela-login').style.display = 'none';
+    $('tela-dashboard').style.display = 'flex';
+    $('display-nome-usuario').innerText = state.user.nome;
+
+    aplicarPermissoesUI();
+
+    const isUser = (String(state.user?.perfil || '').toLowerCase() === 'usuario');
+    if (isUser) {
+        navegar('apontamento');
+    } else {
+        navegar('dashboard');
+    }
+}

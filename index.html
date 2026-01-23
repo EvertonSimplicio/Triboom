@@ -214,7 +214,8 @@
                         <option value="financeiro">Detalhado Financeiro</option>
                         <option value="notas">Detalhado Notas</option>
                         <option value="estoque">Estoque Baixo</option>
-                    </select>
+                                            <option value="apontamento">Apontamento</option>
+</select>
                     <button class="btn-action" onclick="navegar('relatorios')"><span class="material-icons">refresh</span> Atualizar</button>
                     <button class="btn-action" onclick="window.print()" style="background:#34495e"><span class="material-icons">print</span> Imprimir</button>
                 </div>
@@ -244,7 +245,50 @@
                     <h3 style="margin-top:25px;">Produtos com Menor Estoque</h3>
                     <table><thead><tr><th>Cód.</th><th>Produto</th><th>Grupo</th><th>Qtd</th></tr></thead><tbody id="rel-baixo-estoque-corpo"></tbody></table>
                 </div>
+            
+            <div id="rel-sec-apontamento" class="section-card" style="display:none;">
+                <h3>Relatório de Apontamento</h3>
+                <div class="toolbar" style="gap:10px; flex-wrap:wrap;">
+                    <div class="form-group" style="min-width:220px;">
+                        <label style="font-size:12px; color:#666;">Funcionário</label>
+                        <select id="rel-apont-funcionario"></select>
+                    </div>
+                    <div class="form-group" style="min-width:160px;">
+                        <label style="font-size:12px; color:#666;">De</label>
+                        <input type="date" id="rel-apont-de" />
+                    </div>
+                    <div class="form-group" style="min-width:160px;">
+                        <label style="font-size:12px; color:#666;">Até</label>
+                        <input type="date" id="rel-apont-ate" />
+                    </div>
+                    <button class="btn-action btn-add" id="btn-rel-apont-buscar" style="height:40px; align-self:flex-end;">Buscar</button>
+                </div>
+
+                <div style="margin-top:10px; display:flex; gap:16px; flex-wrap:wrap;">
+                    <div><b>Total de horas:</b> <span id="rel-apont-total">0:00</span></div>
+                    <div style="color:#999;" id="rel-apont-msg"></div>
+                </div>
+
+                <div style="margin-top:12px; overflow:auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Funcionário</th>
+                                <th>Entrada</th>
+                                <th>Intervalo (início)</th>
+                                <th>Intervalo (fim)</th>
+                                <th>Saída</th>
+                                <th>Horas</th>
+                                <th>Obs.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rel-apont-corpo"></tbody>
+                    </table>
+                </div>
             </div>
+
+</div>
 
             <div id="view-funcionarios" class="view-section">
                 <div class="toolbar">
@@ -372,6 +416,18 @@
                 <div class="form-group"><label>Login</label><input type="text" id="user_login"></div>
                 <div class="form-group"><label>Senha</label><input type="password" id="user_senha"></div>
                 <div class="form-group"><label>Perfil</label><select id="user_perfil"><option value="Admin">Admin</option><option value="Usuario">Usuário</option></select></div>
+                <div class="form-group" style="margin-top:10px;">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="user_eh_funcionario" />
+                        <span>Este usuário é um funcionário</span>
+                    </label>
+                </div>
+                <div class="form-group" id="grp-user-funcionario" style="display:none;">
+                    <label>Vincular ao Funcionário</label>
+                    <select id="user_funcionario_id"></select>
+                    <small style="color:#888;">* Somente funcionários ativos aparecem na lista.</small>
+                </div>
+
                 <div class="actions"><button class="btn-action btn-add" id="btn-salvar-usuario">Salvar</button></div>
             </form>
         </div>
