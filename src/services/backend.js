@@ -360,6 +360,12 @@ async criarApontamento(payload) {
             .single();
         if (error) throw error;
         return data;
+    },
+
+    // Troca a senha do usuário autenticado.
+    // (mantido também como export separado para uso em imports)
+    async trocarSenhaUsuario(usuarioId, senhaAtual, senhaNova) {
+        return trocarSenhaUsuario(usuarioId, senhaAtual, senhaNova);
     }
 
 };
