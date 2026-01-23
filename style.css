@@ -86,3 +86,7 @@ header { background: white; padding: 15px 30px; box-shadow: 0 2px 5px rgba(0,0,0
 @keyframes slideDown { from {top: -50px; opacity: 0;} to {top: 5%; opacity: 1;} }
 .anime-left { animation: animeLeft 0.5s forwards; }
 @keyframes animeLeft { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+
+/* Clique no nome do usuário (topbar) para abrir troca de senha */
+.user-greeting{cursor:pointer; user-select:none;}
+.user-greeting:hover{text-decoration:underline;}

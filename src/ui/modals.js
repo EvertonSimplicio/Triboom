@@ -300,6 +300,89 @@ export function initModals() {
   async function updateGrupoSelects() { const grps = await Backend.getGrupos(); const opts = grps.map(g => `<option value="${g}">${g}</option>`).join(''); $('prod_grupo').innerHTML = '<option value="">Selecione...</option>' + opts; $('filtro-grupo').innerHTML = '<option value="">Todos</option>' + opts; }
 
   // --- INIT ---
+
+  // --- TROCAR SENHA (usuário logado) ---
+  const btnPerfilUsuario = document.getElementById('btn-perfil-usuario');
+  const modalTrocarSenha = document.getElementById('modal-trocar-senha');
+  const fecharTrocarSenha = document.getElementById('fechar-modal-trocar-senha');
+  const formTrocarSenha = document.getElementById('form-trocar-senha');
+
+  const abrirTrocarSenha = () => {
+    if (!modalTrocarSenha) return;
+    const u = State.usuarioLogado || {};
+    const elNome = document.getElementById('ts-nome');
+    const elLogin = document.getElementById('ts-login');
+    const elAtual = document.getElementById('ts-atual');
+    const elNova = document.getElementById('ts-nova');
+    const elConf = document.getElementById('ts-confirmar');
+
+    if (elNome) elNome.value = u.nome || '';
+    if (elLogin) elLogin.value = u.usuario || '';
+    if (elAtual) elAtual.value = '';
+    if (elNova) elNova.value = '';
+    if (elConf) elConf.value = '';
+
+    modalTrocarSenha.style.display = 'block';
+    setTimeout(() => { if (elAtual) elAtual.focus(); }, 0);
+  };
+
+  if (btnPerfilUsuario && modalTrocarSenha) {
+    btnPerfilUsuario.addEventListener('click', abrirTrocarSenha);
+    btnPerfilUsuario.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        abrirTrocarSenha();
+      }
+    });
+  }
+
+  if (fecharTrocarSenha && modalTrocarSenha) {
+    fecharTrocarSenha.addEventListener('click', () => {
+      modalTrocarSenha.style.display = 'none';
+    });
+  }
+
+  // Fechar clicando fora
+  window.addEventListener('click', (event) => {
+    if (modalTrocarSenha && event.target === modalTrocarSenha) {
+      modalTrocarSenha.style.display = 'none';
+    }
+  });
+
+  if (formTrocarSenha) {
+    formTrocarSenha.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const senhaAtual = (document.getElementById('ts-atual')?.value || '').trim();
+      const senhaNova = (document.getElementById('ts-nova')?.value || '').trim();
+      const senhaConf = (document.getElementById('ts-confirmar')?.value || '').trim();
+
+      if (!senhaAtual || !senhaNova || !senhaConf) {
+        alert('Preencha todos os campos de senha.');
+        return;
+      }
+      if (senhaNova.length < 4) {
+        alert('A nova senha precisa ter pelo menos 4 caracteres.');
+        return;
+      }
+      if (senhaNova !== senhaConf) {
+        alert('A confirmação da senha não confere.');
+        return;
+      }
+
+      try {
+        const ok = await Backend.trocarSenhaUsuario(State.usuarioLogado.id, senhaAtual, senhaNova);
+        if (!ok) {
+          alert('Senha atual incorreta.');
+          return;
+        }
+        alert('Senha alterada com sucesso!');
+        if (modalTrocarSenha) modalTrocarSenha.style.display = 'none';
+      } catch (err) {
+        alert('Erro ao alterar senha: ' + (err?.message || err));
+      }
+    });
+  }
 }
 
 export { closeModal };

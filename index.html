@@ -273,7 +273,7 @@
                     <h2 id="titulo-secao">DASHBOARD</h2>
                 </div>
                 <div class="header-right" style="display: flex; align-items: center; gap: 15px;">
-                    <span>Olá, <b id="display-nome-usuario">Usuário</b></span>
+                    <span id="btn-perfil-usuario" class="user-greeting" role="button" tabindex="0">Olá, <b id="display-nome-usuario">Usuário</b></span>
                     <button class="btn-sair" id="btnSair">Sair</button>
                 </div>
             </div>
@@ -618,6 +618,46 @@
         </div>
     </div>
 
+  <!-- Modal Trocar Senha (Usuário Logado) -->
+  <div id="modal-trocar-senha" class="modal">
+    <div class="modal-content">
+      <span class="close" id="fechar-modal-trocar-senha">&times;</span>
+      <h3>Trocar Senha</h3>
+
+      <form id="form-trocar-senha">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nome</label>
+            <input type="text" id="ts-nome" disabled />
+          </div>
+          <div class="form-group">
+            <label>Login</label>
+            <input type="text" id="ts-login" disabled />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Senha atual</label>
+            <input type="password" id="ts-atual" autocomplete="current-password" required />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nova senha</label>
+            <input type="password" id="ts-nova" autocomplete="new-password" required />
+          </div>
+          <div class="form-group">
+            <label>Confirmar nova senha</label>
+            <input type="password" id="ts-confirmar" autocomplete="new-password" required />
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </form>
+    </div>
+  </div>
     <div id="modal-funcionario" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span><h3>Cadastro de Funcionário</h3>

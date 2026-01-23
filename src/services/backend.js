@@ -365,3 +365,18 @@ async criarApontamento(payload) {
 };
 
 export { Backend };
+
+export async function trocarSenhaUsuario(usuarioId, senhaAtual, senhaNova) {
+  const db = getDb();
+  // Atualiza somente se a senha atual estiver correta (evita troca sem validação)
+  const { data, error } = await db
+    .from('usuarios')
+    .update({ senha: senhaNova })
+    .eq('id', usuarioId)
+    .eq('senha', senhaAtual)
+    .select();
+
+  if (error) throw error;
+  // Se não retornou linhas, a senha atual não conferiu
+  return Array.isArray(data) && data.length > 0;
+}
