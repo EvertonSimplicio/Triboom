@@ -2,12 +2,13 @@ import { $ } from '../utils/dom.js';
 import { money } from '../utils/format.js';
 import { state } from '../state.js';
 import { Backend } from '../services/backend.js';
-import { prepararApontamento } from './apontamento.js';
-import { prepararRelatorios, renderRelatorios, aplicarFiltroRelatorioTipo } from './relatorios.js';
-
 async function navegar(modulo) {
     state.route = modulo;
     $('titulo-secao').innerText = modulo.toUpperCase().replace('_', ' ');
+
+    // Mobile: fecha o menu ao navegar
+    const dash = document.getElementById('tela-dashboard');
+    if (dash) dash.classList.remove('sidebar-open');
 
     document.querySelectorAll('.sidebar li').forEach(li => li.classList.remove('ativo'));
     const activeLi = document.querySelector(`[data-route="${modulo}"]`);
@@ -29,7 +30,13 @@ async function navegar(modulo) {
         renderFinanceiro(await Backend.getFinanceiro());
     } else if (modulo === 'apontamento') {
         $('view-apontamento').style.display = 'block';
-        await prepararApontamento();
+        try {
+            const { prepararApontamento } = await import('./apontamento.js');
+            await prepararApontamento();
+        } catch (e) {
+            console.error('Erro ao carregar apontamento:', e);
+            alert('Erro ao carregar apontamento: ' + (e?.message || e));
+        }
     } else if (modulo === 'usuarios') {
         $('view-usuarios').style.display = 'block';
         renderUsuarios(await Backend.getUsuarios());
@@ -42,7 +49,15 @@ async function navegar(modulo) {
         renderGrupos(await Backend.getGrupos());
     } else if (modulo === 'relatorios') {
         $('view-relatorios').style.display = 'block';
-        await prepararRelatorios(); renderRelatorios(); aplicarFiltroRelatorioTipo();
+        try {
+            const { prepararRelatorios, renderRelatorios, aplicarFiltroRelatorioTipo } = await import('./relatorios.js');
+            await prepararRelatorios();
+            renderRelatorios();
+            aplicarFiltroRelatorioTipo();
+        } catch (e) {
+            console.error('Erro ao carregar relatórios:', e);
+            alert('Erro ao carregar relatórios: ' + (e?.message || e));
+        }
     } else if (modulo === 'funcionarios') {
         $('view-funcionarios').style.display = 'block';
         renderFuncionarios(await Backend.getFuncionarios());
@@ -132,12 +147,24 @@ function injetarControlesFinanceiros() {
         select.onchange = async () => renderFinanceiro(state.financeiro);
         toolbar.appendChild(select);
     }
-    const toolbarBtn = document.querySelector('#view-financeiro .toolbar > div:last-child');
-    if (toolbarBtn) {
-        const btnBatch = document.createElement('button'); btnBatch.id = 'btn-baixa-lote'; btnBatch.className = 'btn-action';
-        btnBatch.innerHTML = '<span class="material-icons">done_all</span> Baixar Selecionados';
-        btnBatch.style.backgroundColor = '#27ae60'; btnBatch.style.display = 'none'; btnBatch.onclick = realizarBaixaEmLote;
-        toolbarBtn.insertBefore(btnBatch, toolbarBtn.firstChild);
+    // botão de baixa em lote (pode variar a estrutura do HTML)
+    if (!document.getElementById('btn-baixa-lote')) {
+        const toolbarContainer = document.querySelector('#view-financeiro .toolbar');
+        if (toolbarContainer) {
+            // se existir wrapper interno (<div>), usa o último; senão usa o próprio container
+            const inner = toolbarContainer.querySelectorAll(':scope > div');
+            const target = (inner && inner.length) ? inner[inner.length - 1] : toolbarContainer;
+
+            const btnBatch = document.createElement('button');
+            btnBatch.id = 'btn-baixa-lote';
+            btnBatch.className = 'btn-action';
+            btnBatch.innerHTML = '<span class="material-icons">done_all</span> Baixar Selecionados';
+            btnBatch.style.backgroundColor = '#27ae60';
+            btnBatch.style.display = 'none';
+            btnBatch.onclick = realizarBaixaEmLote;
+
+            target.insertBefore(btnBatch, target.firstChild);
+        }
     }
 }
 window.toggleAllFin = (source) => { document.querySelectorAll('.check-fin').forEach(c => c.checked = source.checked); checkFinChanged(); };

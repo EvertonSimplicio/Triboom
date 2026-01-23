@@ -4,6 +4,7 @@ import { Backend } from '../services/backend.js';
 
 let _apontamentoInit = false;
 let _apontamentoAtual = null;
+let _adminEditMode = false;
 
 function _localDateISO() {
   const d = new Date();
@@ -17,6 +18,56 @@ function _fmtHora(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function _isoToHHMM(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function _getSelectedDateISO() {
+  const inp = $('ap-man-data');
+  const v = (inp?.value || '').trim();
+  return v || _localDateISO();
+}
+
+function _isFutureDate(dateISO) {
+  const today = _localDateISO();
+  return String(dateISO) > String(today);
+}
+
+function _isFolgaObs(obs) {
+  const s = (obs || '').toString().trim().toUpperCase();
+  return s === 'FOLGA' || s.startsWith('FOLGA ') || s.startsWith('FOLGA-') || s.startsWith('[FOLGA]');
+}
+
+function _apIsEmpty(ap) {
+  if (!ap) return true;
+  const hasHora = !!(ap.entrada || ap.intervalo_inicio || ap.intervalo_fim || ap.saida);
+  const hasObs = !!(ap.observacao && String(ap.observacao).trim());
+  return !hasHora && !hasObs;
+}
+
+function _combineDateTimeISO(dateISO, hhmm) {
+  if (!hhmm) return null;
+  // Interpreta como horário LOCAL do navegador e converte para ISO (UTC) para salvar no timestamptz
+  const d = new Date(`${dateISO}T${hhmm}:00`);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function _showManualUI(show) {
+  const box = $('apontamento-manual');
+  if (box) box.style.display = show ? 'flex' : 'none';
+
+  // Botões antigos
+  ['btnApEntrada', 'btnApIntIni', 'btnApIntFim', 'btnApSaida'].forEach(id => {
+    const b = $(id);
+    if (b) b.style.display = show ? 'none' : '';
+  });
 }
 
 function _setApStatus(msg) {
@@ -114,6 +165,7 @@ export async function prepararApontamento() {
     sel.value = f.id;
     sel.disabled = true;
     _setBtnsDisabled(false);
+    _showManualUI(true);
   } else {
     // Admin: lista todos ativos
     funcionariosAtivos.forEach(f => {
@@ -124,9 +176,32 @@ export async function prepararApontamento() {
     });
     sel.disabled = false;
     _setBtnsDisabled(false);
+    _showManualUI(_adminEditMode);
   }
 
-  $('apontamento-data').innerText = _localDateISO();
+
+  // Botão "Corrigir" (somente Admin) - ativa modo correção e libera edição manual
+  const isAdmin = (perfil === 'admin');
+  const btnEditar = $('btnApEditar');
+  if (btnEditar) {
+    btnEditar.style.display = isAdmin ? '' : 'none';
+    btnEditar.innerHTML = _adminEditMode
+      ? '<span class="material-icons">close</span> Cancelar correção'
+      : '<span class="material-icons">edit</span> Corrigir';
+    btnEditar.onclick = async () => {
+      _adminEditMode = !_adminEditMode;
+      // Admin em modo correção usa a UI manual (data + horários)
+      if (isAdmin) _showManualUI(_adminEditMode);
+      btnEditar.innerHTML = _adminEditMode
+        ? '<span class="material-icons">close</span> Cancelar correção'
+        : '<span class="material-icons">edit</span> Corrigir';
+      await carregarApontamentoDia();
+    };
+  }
+
+  const dInp = $('ap-man-data');
+  if (dInp) dInp.value = _localDateISO();
+  $('apontamento-data').innerText = _getSelectedDateISO();
 
   if (!_apontamentoInit) {
     _apontamentoInit = true;
@@ -136,6 +211,51 @@ export async function prepararApontamento() {
     $('btnApIntIni').onclick = () => acaoApontamento('intervalo_inicio');
     $('btnApIntFim').onclick = () => acaoApontamento('intervalo_fim');
     $('btnApSaida').onclick = () => acaoApontamento('saida');
+
+    // Modo manual (funcionário preenche horários e salva ao informar Saída)
+    const inpEntrada = $('ap-man-entrada');
+    const inpIntIni = $('ap-man-int-ini');
+    const inpIntFim = $('ap-man-int-fim');
+    const inpSaida = $('ap-man-saida');
+    const btnSalvar = $('btnApSalvarManual');
+
+    const salvar = () => {
+      const perfil = String(state.user?.perfil || '').toLowerCase();
+      const isUser = (perfil === 'usuario');
+      if (!isUser && _adminEditMode) return salvarApontamentoAdminCorrecao();
+      return salvarApontamentoManual();
+    };
+    if (btnSalvar) btnSalvar.onclick = salvar;
+    if (inpSaida) inpSaida.onchange = () => {
+      const perfil = String(state.user?.perfil || '').toLowerCase();
+      const isUser = (perfil === 'usuario');
+      if (isUser) salvar();
+    };
+
+    const inpData = $('ap-man-data');
+    const chkFolga = $('ap-man-folga');
+    const toggleFolga = () => {
+      const isFolga = !!chkFolga?.checked;
+      ['ap-man-entrada','ap-man-int-ini','ap-man-int-fim','ap-man-saida'].forEach(id => {
+        const el = $(id);
+        if (el) el.disabled = isFolga;
+      });
+      if (isFolga) _setApStatus('Marquei como folga. Selecione a Data e clique em Salvar.');
+    };
+    if (inpData) inpData.onchange = () => carregarApontamentoDia();
+    if (chkFolga) chkFolga.onchange = () => {
+      // Não recarrega do backend ao marcar Folga, senão desfaz o check
+      const isFolga = !!chkFolga.checked;
+      if (isFolga) {
+        ['ap-man-entrada','ap-man-int-ini','ap-man-int-fim','ap-man-saida'].forEach(id => {
+          const el = $(id);
+          if (el) el.value = '';
+        });
+      }
+      toggleFolga();
+    };
+    toggleFolga();
+
   }
 
   await carregarApontamentoDia();
@@ -146,7 +266,7 @@ export async function carregarApontamentoDia() {
   const funcionarioId = _normId(sel?.value);
   if (!funcionarioId) return;
 
-  const dataISO = _localDateISO();
+  const dataISO = _getSelectedDateISO();
   $('apontamento-data').innerText = dataISO;
 
   try {
@@ -154,23 +274,96 @@ export async function carregarApontamentoDia() {
     const ap = await Backend.getApontamentoDia(funcionarioId, dataISO);
     _apontamentoAtual = ap;
 
+    // Preenche inputs do modo manual (se existir)
+    const inpData = $('ap-man-data');
+    if (inpData) inpData.value = dataISO;
+    const chkFolga = $('ap-man-folga');
+    const isFolgaTmp = _isFolgaObs(ap?.observacao);
+    if (chkFolga) chkFolga.checked = isFolgaTmp;
+    // aplica estado de habilitar/desabilitar campos conforme Folga
+    const _perfilTmp = String(state.user?.perfil || '').toLowerCase();
+    const _isUserTmp = (_perfilTmp === 'usuario');
+    const _isAdminTmp = !_isUserTmp;
+    if (!(_isAdminTmp && _adminEditMode)) {
+      const _isFolgaChecked = !!chkFolga?.checked;
+      ['ap-man-entrada','ap-man-int-ini','ap-man-int-fim','ap-man-saida'].forEach(id => {
+        const el = $(id);
+        if (el) el.disabled = _isFolgaChecked;
+      });
+    }
+
+    const inE = $('ap-man-entrada'); if (inE) inE.value = _isoToHHMM(ap?.entrada);
+    const inII = $('ap-man-int-ini'); if (inII) inII.value = _isoToHHMM(ap?.intervalo_inicio);
+    const inIF = $('ap-man-int-fim'); if (inIF) inIF.value = _isoToHHMM(ap?.intervalo_fim);
+    const inS = $('ap-man-saida'); if (inS) inS.value = _isoToHHMM(ap?.saida);
+
     $('apontamento-hora-entrada').innerText = _fmtHora(ap?.entrada);
     $('apontamento-hora-int-ini').innerText = _fmtHora(ap?.intervalo_inicio);
     $('apontamento-hora-int-fim').innerText = _fmtHora(ap?.intervalo_fim);
     $('apontamento-hora-saida').innerText = _fmtHora(ap?.saida);
 
-    if (!ap) {
-      _setApStatus('Nenhum registro hoje. Clique em “Entrada” para iniciar.');
+    
+    const perfil = String(state.user?.perfil || '').toLowerCase();
+    const isUser = (perfil === 'usuario');
+    const btnSalvar = $('btnApSalvarManual');
+
+    const isAdmin = !isUser;
+    // Admin em modo correção: libera edição e permite sobrescrever
+    if (isAdmin && _adminEditMode) {
+      if (btnSalvar) btnSalvar.disabled = false;
+      ['ap-man-entrada','ap-man-int-ini','ap-man-int-fim','ap-man-saida'].forEach(id => {
+        const el = $(id);
+        if (el) el.disabled = false;
+      });
+    }
+
+
+    const isFolga = _isFolgaObs(ap?.observacao);
+    const empty = _apIsEmpty(ap);
+
+    if (!(isAdmin && _adminEditMode)) {
+    // data futura não permite lançar
+    if (_isFutureDate(dataISO)) {
+      _setApStatus('⚠️ Não é permitido lançar apontamento em data futura.');
+      if (btnSalvar) btnSalvar.disabled = true;
+    } else if (!ap || empty) {
+      const msg = (dataISO === _localDateISO())
+        ? 'Nenhum registro hoje. Preencha os horários e clique em Salvar (ou marque Folga).'
+        : 'Nenhum registro nesta data. Preencha os horários e clique em Salvar (ou marque Folga).';
+      _setApStatus(msg);
+      if (btnSalvar) btnSalvar.disabled = false;
+    } else if (isFolga) {
+      _setApStatus('Folga registrada ✅');
+      if (btnSalvar) btnSalvar.disabled = true;
     } else if (ap.saida) {
-      _setApStatus('Turno finalizado hoje ✅');
-    } else if (ap.intervalo_inicio && !ap.intervalo_fim) {
-      _setApStatus('Em intervalo. Registre “Intervalo (fim)” para continuar.');
-    } else if (ap.entrada && !ap.intervalo_inicio) {
-      _setApStatus('Em trabalho. Se for pausar, registre “Intervalo (início)”, ou registre “Saída”.');
-    } else if (ap.entrada && ap.intervalo_fim && !ap.saida) {
-      _setApStatus('Intervalo finalizado. Registre “Saída” ao terminar.');
+      _setApStatus('Turno finalizado ✅');
+      if (btnSalvar) btnSalvar.disabled = true;
     } else {
-      _setApStatus('');
+      _setApStatus('Já existe lançamento nesta data. Para evitar duplicar, não vou sobrescrever.');
+      if (btnSalvar) btnSalvar.disabled = true;
+    }
+
+    }
+
+    if (isAdmin && _adminEditMode) {
+      _setApStatus(ap ? '✏️ Modo correção: edite os horários e clique em Salvar.' : '✏️ Modo correção: preencha os horários e clique em Salvar.');
+    }
+
+    // Se for funcionário e a data já tem registro, trava edição
+    if (isUser && btnSalvar?.disabled) {
+      ['ap-man-entrada','ap-man-int-ini','ap-man-int-fim','ap-man-saida'].forEach(id => {
+        const el = $(id);
+        if (el) el.disabled = true;
+      });
+    } else {
+      // Se não estiver em folga, mantém inputs liberados
+      const chkFolga = $('ap-man-folga');
+      if (!chkFolga?.checked) {
+        ['ap-man-entrada','ap-man-int-ini','ap-man-int-fim','ap-man-saida'].forEach(id => {
+          const el = $(id);
+          if (el) el.disabled = false;
+        });
+      }
     }
   } catch (e) {
     console.error(e);
@@ -209,7 +402,7 @@ function _validarSequencia(ap, acao) {
 async function acaoApontamento(acao) {
   const funcionarioId = _normId($('apontamento-funcionario')?.value);
   const obs = ($('apontamento-obs')?.value || '').trim();
-  const dataISO = _localDateISO();
+  const dataISO = _getSelectedDateISO();
   if (!funcionarioId) return;
 
   try {
@@ -286,3 +479,227 @@ async function acaoApontamento(acao) {
     _setApStatus('❌ Erro ao salvar: ' + (e?.message || ''));
   }
 }
+
+
+
+async function salvarApontamentoManual() {
+  const funcionarioId = _normId($('apontamento-funcionario')?.value);
+  const obs = ($('apontamento-obs')?.value || '').trim();
+  const dataISO = _getSelectedDateISO();
+  if (!funcionarioId) return;
+
+  if (_isFutureDate(dataISO)) {
+    _setApStatus('⚠️ Não é permitido lançar em data futura.');
+    return;
+  }
+
+  const isFolga = !!$('ap-man-folga')?.checked;
+
+  const eIn = $('ap-man-entrada')?.value || '';
+  const iIni = $('ap-man-int-ini')?.value || '';
+  const iFim = $('ap-man-int-fim')?.value || '';
+  const sOut = $('ap-man-saida')?.value || '';
+
+  try {
+    // busca existente para evitar duplicidade
+    const ap = await Backend.getApontamentoDia(funcionarioId, dataISO);
+
+    // Folga: salva sem horários, apenas em data vazia
+    if (isFolga) {
+      if (ap && !_apIsEmpty(ap)) {
+        _setApStatus('⚠️ Já existe lançamento nessa data. Para evitar duplicar, não vou sobrescrever.');
+        await carregarApontamentoDia();
+        return;
+      }
+
+      _setApStatus('Salvando folga...');
+      const obsFolga = obs ? `FOLGA - ${obs}` : 'FOLGA';
+
+      const payload = {
+        funcionario_id: funcionarioId,
+        data: dataISO,
+        entrada: null,
+        intervalo_inicio: null,
+        intervalo_fim: null,
+        saida: null,
+        observacao: obsFolga,
+        usuario_id: _normId(state.user?.id),
+      };
+
+      let salvo;
+      if (!ap) salvo = await Backend.criarApontamento(payload);
+      else salvo = await Backend.atualizarApontamento(ap.id, payload);
+
+      _apontamentoAtual = salvo;
+      _setApStatus('✅ Folga registrada.');
+      await carregarApontamentoDia();
+      return;
+    }
+
+    // só salva quando tiver saída (pedido do usuário)
+    if (!sOut) {
+      _setApStatus('Preencha a Saída para salvar o apontamento (ou marque Folga).');
+      return;
+    }
+
+    const entradaISO = _combineDateTimeISO(dataISO, eIn);
+    const intIniISO = _combineDateTimeISO(dataISO, iIni);
+    const intFimISO = _combineDateTimeISO(dataISO, iFim);
+    const saidaISO = _combineDateTimeISO(dataISO, sOut);
+
+    if (!entradaISO) {
+      _setApStatus('⚠️ Informe a Entrada (horário) antes de salvar.');
+      return;
+    }
+    if (!saidaISO) {
+      _setApStatus('⚠️ Horário de Saída inválido.');
+      return;
+    }
+
+    // valida sequências básicas
+    if (intIniISO && !intFimISO) {
+      _setApStatus('⚠️ Se iniciou intervalo, informe também o fim do intervalo.');
+      return;
+    }
+    if (intFimISO && !intIniISO) {
+      _setApStatus('⚠️ Informe o início do intervalo antes do fim.');
+      return;
+    }
+
+    // não sobrescrever lançamentos já feitos
+    if (ap?.saida) {
+      _setApStatus('⚠️ Já existe uma Saída registrada nessa data. Para ajustes, use o Admin/relatório.');
+      await carregarApontamentoDia();
+      return;
+    }
+
+    const camposJa = [];
+    if (ap?.entrada) camposJa.push('Entrada');
+    if (ap?.intervalo_inicio) camposJa.push('Intervalo (início)');
+    if (ap?.intervalo_fim) camposJa.push('Intervalo (fim)');
+
+    if (camposJa.length) {
+      _setApStatus('⚠️ Já existe lançamento nessa data (' + camposJa.join(', ') + '). Para evitar duplicar, não vou sobrescrever.');
+      await carregarApontamentoDia();
+      return;
+    }
+
+    _setApStatus('Salvando...');
+
+    const patchAll = {
+      entrada: entradaISO,
+      intervalo_inicio: intIniISO || null,
+      intervalo_fim: intFimISO || null,
+      saida: saidaISO,
+      observacao: obs || null,
+      usuario_id: _normId(state.user?.id),
+    };
+
+    let salvo;
+    if (!ap) {
+      const payload = { funcionario_id: funcionarioId, data: dataISO, ...patchAll };
+      salvo = await Backend.criarApontamento(payload);
+    } else {
+      salvo = await Backend.atualizarApontamento(ap.id, patchAll);
+    }
+
+    _apontamentoAtual = salvo;
+    _setApStatus('✅ Apontamento salvo. Total do dia será calculado no Relatório.');
+    await carregarApontamentoDia();
+  } catch (e) {
+    console.error(e);
+    _setApStatus('❌ Erro ao salvar: ' + (e?.message || ''));
+  }
+}
+
+
+async function salvarApontamentoAdminCorrecao() {
+  const funcionarioId = _normId($('apontamento-funcionario')?.value);
+  const obsRaw = ($('apontamento-obs')?.value || '').trim();
+  const dataISO = _getSelectedDateISO();
+  if (!funcionarioId) return;
+
+  if (_isFutureDate(dataISO)) {
+    _setApStatus('⚠️ Não é permitido lançar/corrigir em data futura.');
+    return;
+  }
+
+  const isFolga = !!$('ap-man-folga')?.checked;
+
+  const eIn = $('ap-man-entrada')?.value || '';
+  const iIni = $('ap-man-int-ini')?.value || '';
+  const iFim = $('ap-man-int-fim')?.value || '';
+  const sOut = $('ap-man-saida')?.value || '';
+
+  try {
+    _setApStatus('Salvando correção...');
+    const ap = await Backend.getApontamentoDia(funcionarioId, dataISO);
+
+    // Monta patch
+    let patch = {
+      usuario_id: _normId(state.user?.id),
+    };
+
+    if (isFolga) {
+      const obsFolga = obsRaw ? `FOLGA - ${obsRaw}` : 'FOLGA';
+      patch = {
+        ...patch,
+        entrada: null,
+        intervalo_inicio: null,
+        intervalo_fim: null,
+        saida: null,
+        observacao: obsFolga,
+      };
+    } else {
+      // Converte horas
+      const entradaISO = _combineDateTimeISO(dataISO, eIn);
+      const intIniISO = _combineDateTimeISO(dataISO, iIni);
+      const intFimISO = _combineDateTimeISO(dataISO, iFim);
+      const saidaISO = _combineDateTimeISO(dataISO, sOut);
+
+      // validações leves
+      if (!entradaISO && !intIniISO && !intFimISO && !saidaISO && !obsRaw) {
+        _setApStatus('⚠️ Informe pelo menos um horário (ou Obs.) para salvar a correção.');
+        return;
+      }
+      if (intIniISO && !intFimISO) {
+        _setApStatus('⚠️ Se iniciou intervalo, informe também o fim do intervalo.');
+        return;
+      }
+      if (intFimISO && !intIniISO) {
+        _setApStatus('⚠️ Informe o início do intervalo antes do fim.');
+        return;
+      }
+      // se informou saída, exige entrada
+      if (saidaISO && !entradaISO) {
+        _setApStatus('⚠️ Para registrar Saída, informe também a Entrada.');
+        return;
+      }
+
+      patch = {
+        ...patch,
+        entrada: entradaISO || null,
+        intervalo_inicio: intIniISO || null,
+        intervalo_fim: intFimISO || null,
+        saida: saidaISO || null,
+        observacao: obsRaw || null,
+      };
+    }
+
+    let salvo;
+    if (!ap) {
+      const payload = { funcionario_id: funcionarioId, data: dataISO, ...patch };
+      salvo = await Backend.criarApontamento(payload);
+    } else {
+      salvo = await Backend.atualizarApontamento(ap.id, patch);
+    }
+
+    _apontamentoAtual = salvo;
+    _setApStatus('✅ Correção salva.');
+    await carregarApontamentoDia();
+  } catch (e) {
+    console.error(e);
+    _setApStatus('❌ Erro ao salvar correção: ' + (e?.message || ''));
+  }
+}
+

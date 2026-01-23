@@ -1,6 +1,40 @@
 import { $ } from '../utils/dom.js';
+import { money } from '../utils/format.js';
 import { state } from '../state.js';
 import { Backend } from '../services/backend.js';
+
+// Helpers locais (evita dependência circular)
+function _toDate(value) {
+    if (!value) return null;
+    if (typeof value === 'string' && value.length === 10) return new Date(value + 'T00:00:00');
+    return new Date(value);
+}
+function safeDate(dateStr) {
+    if (!dateStr) return "-";
+    if (typeof dateStr === 'string' && dateStr.length === 10) return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
+    return new Date(dateStr).toLocaleDateString('pt-BR');
+}
+function _isFuncionarioAtivo(f) {
+    if (!f || typeof f !== 'object') return false;
+
+    if (typeof f.ativo === 'boolean') return f.ativo;
+    if (typeof f.active === 'boolean') return f.active;
+    if (typeof f.habilitado === 'boolean') return f.habilitado;
+
+    const status = (f.status ?? f.situacao ?? f.estado ?? '').toString().trim().toUpperCase();
+    if (status) {
+        if (['ATIVO', 'ATIVA', 'SIM', 'TRUE', '1'].includes(status)) return true;
+        if (['INATIVO', 'INATIVA', 'NAO', 'NÃO', 'FALSE', '0'].includes(status)) return false;
+    }
+    return true; // se não existir coluna, assume ativo
+}
+function _normId(v) {
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+    return (/^\d+$/.test(s)) ? Number(s) : s;
+}
+
 
 async function prepararRelatorios() {
     if (state.produtos.length === 0) await Backend.getProdutos();

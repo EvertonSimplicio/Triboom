@@ -80,7 +80,152 @@
 
         #container-parcelas-geradas { max-height: 200px; overflow-y: auto; padding-right: 5px; }
         .item-parcela { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
-    </style>
+    
+
+        /* ================= MOBILE RESPONSIVO ================= */
+        .btn-menu { display: none; }
+
+        .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+
+        /* melhora toque em inputs/botoes */
+        input, select, button { min-height: 44px; }
+
+        @media (max-width: 900px) {
+          body { overflow: hidden; }
+
+          /* sidebar vira drawer */
+          .btn-menu {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            border: none;
+            border-radius: 10px;
+            background: var(--secondary);
+            color: #fff;
+            cursor: pointer;
+            flex: 0 0 auto;
+          }
+          .btn-menu .material-icons { margin: 0; }
+
+          .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: min(82vw, 320px);
+            z-index: 1000;
+            transform: translateX(-105%);
+            transition: transform .25s ease;
+            box-shadow: 0 8px 24px rgba(0,0,0,.25);
+          }
+
+          .sidebar > div { padding: 16px 12px !important; }
+          .sidebar img { width: 85% !important; max-width: 220px; }
+          .sidebar h2 { font-size: 1.05rem !important; }
+
+          /* overlay */
+          .sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.35);
+            z-index: 900;
+          }
+
+          /* quando aberto */
+          #tela-dashboard.sidebar-open .sidebar { transform: translateX(0); }
+          #tela-dashboard.sidebar-open .sidebar-backdrop { display: block; }
+
+          /* conteúdo ocupa tela toda */
+          .main-content { padding: 12px; width: 100%; }
+
+          /* header mais compacto e sticky */
+          .header {
+            position: sticky;
+            top: 0;
+            z-index: 500;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 12px;
+          }
+          #titulo-secao { font-size: 1.15rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+          .header-right span { font-size: 0.95rem; }
+          .btn-sair { padding: 10px 14px; border-radius: 8px; }
+
+          /* cards e tabelas */
+          .card-container { flex-direction: column; }
+          .card { width: 100% !important; }
+
+          /* toolbars viram coluna para facilitar toque */
+          .toolbar { flex-direction: column; gap: 10px; }
+          .toolbar > * { width: 100% !important; flex: initial !important; }
+
+          /* apontamento manual fica em coluna */
+          .apontamento-manual {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+            width: 100% !important;
+          }
+          .apontamento-manual > div { width: 100% !important; }
+          #btnApSalvarManual { width: 100% !important; margin-top: 0 !important; }
+
+          /* botões do apontamento e ações sempre full */
+          .btn-action { width: 100%; justify-content: center; }
+
+          /* tabelas: permitir scroll horizontal */
+          .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          table { min-width: 720px; }
+        }
+
+        @media (max-width: 420px) {
+          .main-content { padding: 10px; }
+          #titulo-secao { font-size: 1.05rem; }
+          .header-right span { display: none; } /* deixa só o botão sair */
+        }
+    
+
+
+        /* ===== Sidebar recolhível (desktop) ===== */
+        .btn-collapse{
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 42px;
+          height: 42px;
+          border: none;
+          border-radius: 10px;
+          background: #eef2f6;
+          color: #2b3a4a;
+          cursor: pointer;
+        }
+        .btn-collapse .material-icons{ margin:0; }
+        @media (max-width: 900px){
+          .btn-collapse{ display:none; }
+        }
+
+        @media (min-width: 901px){
+          #tela-dashboard.sidebar-collapsed .sidebar{ width: 72px; }
+          #tela-dashboard.sidebar-collapsed .sidebar > div{ padding: 14px 8px !important; }
+          #tela-dashboard.sidebar-collapsed .sidebar > div img{ display:none !important; }
+          #tela-dashboard.sidebar-collapsed .sidebar > div h2{ display:none !important; }
+
+          #tela-dashboard.sidebar-collapsed .sidebar li{
+            justify-content:center;
+            padding: 14px 0;
+            font-size: 0; /* esconde o texto */
+          }
+          #tela-dashboard.sidebar-collapsed .sidebar li .material-icons{
+            margin-right: 0;
+            font-size: 24px;
+          }
+        }
+
+</style>
 </head>
 <body>
 
@@ -90,7 +235,7 @@
             <h2>Triboom Sorvetes</h2>
             <input type="text" id="usuario" placeholder="Usuário">
             <input type="password" id="senha" placeholder="Senha">
-            <button class="btn-login" id="btnLogin">ENTRAR</button>
+            <button class="btn-login" id="btnLogin" type="button">ENTRAR</button>
             <p id="msg-erro" style="color: red; margin-top: 10px; font-size: 13px;"></p>
         </div>
     </div>
@@ -114,11 +259,20 @@
                 <li data-route="configuracoes"><span class="material-icons">settings</span> Configurações</li>
             </ul>
         </nav>
+        <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
         <main class="main-content">
             <div class="header">
-                <h2 id="titulo-secao">DASHBOARD</h2>
-                <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="header-left">
+                    <button class="btn-menu" id="btnMenu" aria-label="Abrir menu">
+                        <span class="material-icons">menu</span>
+                    </button>
+                    <button class="btn-collapse" id="btnCollapse" aria-label="Esconder menu lateral">
+                        <span class="material-icons" id="iconCollapse">chevron_left</span>
+                    </button>
+                    <h2 id="titulo-secao">DASHBOARD</h2>
+                </div>
+                <div class="header-right" style="display: flex; align-items: center; gap: 15px;">
                     <span>Olá, <b id="display-nome-usuario">Usuário</b></span>
                     <button class="btn-sair" id="btnSair">Sair</button>
                 </div>
@@ -182,6 +336,37 @@
                 <div class="toolbar">
                     <select id="apontamento-funcionario"></select>
                     <input id="apontamento-obs" placeholder="Observação (opcional)" />
+                    <button class="btn-action btn-warning" id="btnApEditar" style="display:none;"><span class="material-icons">edit</span> Corrigir</button>
+                    <div id="apontamento-manual" class="apontamento-manual" style="display:none; gap:10px; align-items:center;">
+                        <div style="display:flex; flex-direction:column; font-size:12px; min-width:140px;">
+    <label>Data</label>
+    <input type="date" id="ap-man-data" />
+  </div>
+  <div style="display:flex; flex-direction:column; font-size:12px; min-width:120px; justify-content:flex-end; padding-top:18px;">
+    <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin:0;">
+      <input type="checkbox" id="ap-man-folga" /> <span>Folga</span>
+    </label>
+  </div>
+<div style="display:flex; flex-direction:column; font-size:12px;">
+                        <label>Entrada</label>
+                        <input type="time" id="ap-man-entrada" />
+                      </div>
+                      <div style="display:flex; flex-direction:column; font-size:12px;">
+                        <label>Intervalo (início)</label>
+                        <input type="time" id="ap-man-int-ini" />
+                      </div>
+                      <div style="display:flex; flex-direction:column; font-size:12px;">
+                        <label>Intervalo (fim)</label>
+                        <input type="time" id="ap-man-int-fim" />
+                      </div>
+                      <div style="display:flex; flex-direction:column; font-size:12px;">
+                        <label>Saída</label>
+                        <input type="time" id="ap-man-saida" />
+                      </div>
+                      <button class="btn-action btn-add" id="btnApSalvarManual" style="height:40px; margin-top:18px;">
+                        <span class="material-icons">save</span> Salvar
+                      </button>
+                    </div>
                     <button class="btn-action btn-add" id="btnApEntrada"><span class="material-icons">login</span> Entrada</button>
                     <button class="btn-action btn-warning" id="btnApIntIni"><span class="material-icons">pause_circle</span> Intervalo (início)</button>
                     <button class="btn-action btn-warning" id="btnApIntFim"><span class="material-icons">play_circle</span> Intervalo (fim)</button>

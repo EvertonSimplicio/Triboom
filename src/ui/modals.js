@@ -4,6 +4,10 @@ import { state } from '../state.js';
 import { Backend } from '../services/backend.js';
 import { navegar, updateGrupoSelects } from './navigation.js';
 
+function _isFuncionarioAtivo(f) {
+  return !!f && (f.ativo === true || f.ativo === 1 || f.ativo === 'true' || f.ativo === 'TRUE');
+}
+
 function closeModal(id) { $(id).style.display = 'none'; }
 
 export function initModals() {
