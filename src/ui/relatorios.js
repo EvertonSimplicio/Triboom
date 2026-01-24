@@ -270,7 +270,9 @@ function exportarExcel() {
       return;
     }
 
-    const tipo = $('#rel_tipo')?.value || 'todos';
+    // Nosso helper `$` pega elemento por ID (sem '#').
+    // Usar '#rel_tipo' fazia cair no fallback e exportar o relatório errado.
+    const tipo = $('rel_tipo')?.value || 'todos';
 
     const sections = [
       { key: 'resumo', id: 'rel-sec-resumo', sheet: 'Resumo' },
