@@ -99,3 +99,37 @@ header { background: white; padding: 15px 30px; box-shadow: 0 2px 5px rgba(0,0,0
 /* Nome do usuário clicável para trocar senha */
 #btn-perfil-usuario{cursor:pointer; position:relative; z-index:5;}
 #btn-perfil-usuario:hover b{ text-decoration: underline; }
+
+
+/* =============================
+   Impressão (Relatórios)
+   ============================= */
+@media print {
+  body.print-mode-relatorios #sidebar,
+  body.print-mode-relatorios .sidebar,
+  body.print-mode-relatorios .topbar,
+  body.print-mode-relatorios header,
+  body.print-mode-relatorios #view-relatorios .rel-top,
+  body.print-mode-relatorios #view-relatorios .rel-toolbar,
+  body.print-mode-relatorios #view-relatorios .btn,
+  body.print-mode-relatorios #view-relatorios button,
+  body.print-mode-relatorios #view-relatorios .card,
+  body.print-mode-relatorios #view-relatorios .cards,
+  body.print-mode-relatorios #view-relatorios .kpi,
+  body.print-mode-relatorios #view-relatorios .kpi-card,
+  body.print-mode-relatorios #view-relatorios .rel-cards,
+  body.print-mode-relatorios #view-relatorios #rel-sec-resumo,
+  body.print-mode-relatorios #view-relatorios .no-print {
+    display: none !important;
+  }
+
+  body.print-mode-relatorios #view-relatorios {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.print-mode-relatorios #view-relatorios table {
+    width: 100% !important;
+    font-size: 12px !important;
+  }
+}

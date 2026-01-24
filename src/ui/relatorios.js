@@ -355,9 +355,19 @@ function exportarExcel() {
   }
 }
 
+
+function imprimir() {
+  // Imprime somente o conteúdo do relatório (sem cards/controles)
+  document.body.classList.add('print-mode-relatorios');
+  const cleanup = () => document.body.classList.remove('print-mode-relatorios');
+  window.addEventListener('afterprint', cleanup, { once: true });
+  setTimeout(() => window.print(), 50);
+}
+
 if (typeof window !== "undefined") {
   window.Relatorios = window.Relatorios || {};
   window.Relatorios.exportarExcel = exportarExcel;
+  window.Relatorios.imprimir = imprimir;
 }
 
-export { prepararRelatorios, renderRelatorios, aplicarFiltroRelatorioTipo, prepararRelatorioApontamentoUI, carregarRelatorioApontamento, exportarExcel };
+export { prepararRelatorios, renderRelatorios, aplicarFiltroRelatorioTipo, prepararRelatorioApontamentoUI, carregarRelatorioApontamento, exportarExcel, imprimir };

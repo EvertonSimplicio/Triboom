@@ -425,7 +425,7 @@
                                             <option value="apontamento">Apontamento</option>
 </select>
                     <button class="btn-action" onclick="navegar('relatorios')"><span class="material-icons">refresh</span> Atualizar</button>
-                    <button class="btn-action" onclick="window.print()" style="background:#34495e"><span class="material-icons">print</span> Imprimir</button>
+                    <button class="btn-action" onclick="Relatorios.imprimir()" style="background:#34495e"><span class="material-icons">print</span> Imprimir</button>
                     <button class="btn-action" onclick="Relatorios.exportarExcel()" style="background:#1f7a3a"><span class="material-icons">table_view</span> Excel</button>
                 </div>
 
@@ -624,7 +624,7 @@
                 <div class="form-group"><label>Nome</label><input type="text" id="user_nome"></div>
                 <div class="form-group"><label>Login</label><input type="text" id="user_login"></div>
                 <div class="form-group"><label>Senha</label><input type="password" id="user_senha"></div>
-                <div class="form-group"><label>Perfil</label><select id="user_perfil"><option value="Admin">Admin</option><option value="Usuario">Usuário</option></select></div>
+                <div class="form-group"><label>Perfil</label><select id="user_perfil"><option value="Admin">Admin</option><option value="Usuario">Usuário</option><option value="Funcionario">Funcionário</option></select></div>
                 <div class="form-group" style="margin-top:10px;">
                     <label style="display:flex; align-items:center; gap:8px;">
                         <input type="checkbox" id="user_eh_funcionario" />

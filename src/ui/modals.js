@@ -193,6 +193,15 @@ export function initModals() {
               grp.style.display = chk.checked ? 'block' : 'none';
               if (chk.checked) await preencherSelectFuncionarioUsuario(sel.value || null);
           };
+    const selPerfil = $('user_perfil');
+    selPerfil.onchange = async () => {
+      const p = (selPerfil.value || '').toString().toLowerCase();
+      if (p.includes('funcion')) {
+        chk.checked = true;
+        await chk.onchange();
+      }
+    };
+
       }
 
       // se não estiver marcado, só esconde e limpa
