@@ -457,6 +457,8 @@
                         <option value="todos">Visão Geral</option>
                         <option value="resumo">Apenas Cards</option>
                         <option value="financeiro">Detalhado Financeiro</option>
+                        <option value="dre">DRE</option>
+                        <option value="fluxo">Fluxo de Caixa</option>
                         <option value="notas">Detalhado Notas</option>
                         <option value="estoque">Estoque Baixo</option>
                                             <option value="apontamento">Apontamento</option>
@@ -483,6 +485,22 @@
                     <h3 style="margin-top:25px;">Financeiro do Período</h3>
                     <table><thead><tr><th>Vencimento</th><th>Descrição</th><th>Tipo</th><th>Valor</th><th>Status</th></tr></thead><tbody id="rel-financeiro-corpo"></tbody></table>
                 </div>
+
+                <div id="rel-sec-dre">
+                    <h3 style="margin-top:25px;">DRE do Período</h3>
+                    <div class="card-container" style="margin-top:10px;">
+                        <div class="card"><h3>Receitas</h3><div class="valor" id="dre-receitas" style="color:#27ae60">R$ 0,00</div></div>
+                        <div class="card"><h3>Despesas</h3><div class="valor" id="dre-despesas" style="color:#e74c3c">R$ 0,00</div></div>
+                        <div class="card"><h3>Resultado</h3><div class="valor" id="dre-resultado">R$ 0,00</div></div>
+                    </div>
+                    <table style="margin-top:15px;"><thead><tr><th>Grupo</th><th>Tipo</th><th>Valor</th></tr></thead><tbody id="dre-corpo"></tbody></table>
+                </div>
+
+                <div id="rel-sec-fluxo">
+                    <h3 style="margin-top:25px;">Fluxo de Caixa (Pagos)</h3>
+                    <table style="margin-top:15px;"><thead><tr><th>Data</th><th>Entradas</th><th>Saídas</th><th>Saldo do Dia</th><th>Saldo Acumulado</th></tr></thead><tbody id="fluxo-corpo"></tbody></table>
+                </div>
+
                 <div id="rel-sec-notas">
                     <h3 style="margin-top:25px;">Notas de Entrada do Período</h3>
                     <table><thead><tr><th>Data</th><th>Número</th><th>Fornecedor</th><th>Itens</th><th>Valor</th><th>Tipo</th></tr></thead><tbody id="rel-notas-corpo"></tbody></table>

@@ -95,6 +95,91 @@ function renderRelatorios() {
     if (corpoNotas) { corpoNotas.innerHTML = notasPeriodo.sort((a, b) => (_toDate(b.data) - _toDate(a.data))).slice(0, 200).map(n => `<tr><td>${safeDate(n.data)}</td><td>${n.numero || '-'}</td><td>${n.fornecedor || '-'}</td><td>${n.qtd_itens || 0}</td><td style="color:#27ae60"><b>${money(n.valor)}</b></td><td><small>${n.tipo || 'Manual'}</small></td></tr>`).join('') || `<tr><td colspan="6" style="text-align:center; color:#999;">Nenhuma nota</td></tr>`; }
     const corpoBaixo = $('rel-baixo-estoque-corpo');
     if (corpoBaixo) { const low = (state.produtos || []).slice().sort((a, b) => parseFloat(a.qtd || 0) - parseFloat(b.qtd || 0)).slice(0, 15); corpoBaixo.innerHTML = low.map(p => `<tr><td><b>${p.codigo}</b></td><td>${p.nome}</td><td>${p.grupo || '-'}</td><td><b>${p.qtd}</b></td></tr>`).join('') || `<tr><td colspan="4" style="text-align:center; color:#999;">Sem produtos</td></tr>`; }
+
+    // DRE (competência): considera lançamentos do período (pagos e pendentes)
+    renderDRE(finPeriodo);
+
+    // Fluxo de Caixa: considera apenas lançamentos PAGOS do período (movimento real)
+    renderFluxoDeCaixa(finPeriodo);
+}
+
+function renderDRE(finPeriodo) {
+    const elR = $('rel-dre-receitas');
+    const elD = $('rel-dre-despesas');
+    const elRes = $('rel-dre-resultado');
+    const corpo = $('rel-dre-corpo');
+    if (!elR && !elD && !elRes && !corpo) return;
+
+    let rec = 0, desp = 0;
+    let recPago = 0, recPend = 0, despPago = 0, despPend = 0;
+    (finPeriodo || []).forEach(i => {
+        const v = parseFloat(i.valor || 0) || 0;
+        const st = (i.status || '').toString().toLowerCase();
+        const pago = st.includes('pago') || st.includes('paid');
+        if (i.tipo === 'Receita') {
+            rec += v;
+            if (pago) recPago += v; else recPend += v;
+        } else {
+            desp += v;
+            if (pago) despPago += v; else despPend += v;
+        }
+    });
+
+    if (elR) elR.innerText = money(rec);
+    if (elD) elD.innerText = money(desp);
+    if (elRes) elRes.innerText = money(rec - desp);
+
+    if (corpo) {
+        const linhas = [
+            { grupo: 'Receitas', status: 'Pagas', valor: recPago },
+            { grupo: 'Receitas', status: 'Pendentes', valor: recPend },
+            { grupo: 'Despesas', status: 'Pagas', valor: despPago },
+            { grupo: 'Despesas', status: 'Pendentes', valor: despPend },
+            { grupo: 'Total', status: 'Resultado', valor: (rec - desp) },
+        ];
+        corpo.innerHTML = linhas.map(l => {
+            const cor = (l.grupo === 'Despesas') ? '#e74c3c' : (l.grupo === 'Receitas' ? '#27ae60' : '#2c3e50');
+            return `<tr>
+                <td><b>${l.grupo}</b></td>
+                <td>${l.status}</td>
+                <td style="text-align:right; color:${cor}"><b>${money(l.valor)}</b></td>
+            </tr>`;
+        }).join('');
+    }
+}
+
+function renderFluxoDeCaixa(finPeriodo) {
+    const corpo = $('rel-fluxo-corpo');
+    if (!corpo) return;
+
+    // agrupa por data (YYYY-MM-DD)
+    const map = new Map();
+    (finPeriodo || []).forEach(i => {
+        const st = (i.status || '').toString().toLowerCase();
+        const pago = st.includes('pago') || st.includes('paid');
+        const key = (i.data_vencimento || '').toString().slice(0, 10);
+        if (!key) return;
+        if (!map.has(key)) map.set(key, { entradas: 0, saidas: 0 });
+        const row = map.get(key);
+        const v = parseFloat(i.valor || 0) || 0;
+        if (!pago) return; // fluxo = somente pago
+        if (i.tipo === 'Receita') row.entradas += v; else row.saidas += v;
+    });
+
+    const datas = Array.from(map.keys()).sort();
+    let saldoAcum = 0;
+    corpo.innerHTML = datas.map(dt => {
+        const r = map.get(dt);
+        const saldoDia = (r.entradas - r.saidas);
+        saldoAcum += saldoDia;
+        return `<tr>
+          <td>${safeDate(dt)}</td>
+          <td style="text-align:right; color:#27ae60"><b>${money(r.entradas)}</b></td>
+          <td style="text-align:right; color:#e74c3c"><b>${money(r.saidas)}</b></td>
+          <td style="text-align:right;"><b>${money(saldoDia)}</b></td>
+          <td style="text-align:right;"><b>${money(saldoAcum)}</b></td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="5" style="text-align:center; color:#999;">Sem movimentação paga no período</td></tr>`;
 }
 
 // --- RELATÓRIO APONTAMENTO ---
@@ -240,6 +325,8 @@ function aplicarFiltroRelatorioTipo() {
     const cardsFin = $('rel-cards-fin');
     const cardsEst = $('rel-cards-estoque');
     const secFin = $('rel-sec-financeiro');
+    const secDre = $('rel-sec-dre');
+    const secFluxo = $('rel-sec-fluxo');
     const secNotas = $('rel-sec-notas');
     const secBaixo = $('rel-sec-baixo-estoque');
     const secApont = $('rel-sec-apontamento');
@@ -247,12 +334,22 @@ function aplicarFiltroRelatorioTipo() {
     const show = (el, yes) => { if (el) el.style.display = yes ? 'block' : 'none'; };
 
     // padrão: mostra tudo
-    show(secResumo, true); show(cardsFin, true); show(cardsEst, true); show(secFin, true); show(secNotas, true); show(secBaixo, true);
+    show(secResumo, true); show(cardsFin, true); show(cardsEst, true); show(secFin, true); show(secDre, true); show(secFluxo, true); show(secNotas, true); show(secBaixo, true);
     show(secApont, false);
 
     if (tipo === 'todos') return;
     if (tipo === 'resumo') { show(secFin, false); show(secNotas, false); show(secBaixo, false); return; }
     if (tipo === 'financeiro') { show(cardsEst, false); show(secNotas, false); show(secBaixo, false); show(secFin, true); return; }
+    if (tipo === 'dre') {
+        show(cardsFin, false); show(cardsEst, false); show(secFin, false); show(secFluxo, false); show(secNotas, false); show(secBaixo, false);
+        show(secDre, true);
+        return;
+    }
+    if (tipo === 'fluxo') {
+        show(cardsFin, false); show(cardsEst, false); show(secFin, false); show(secDre, false); show(secNotas, false); show(secBaixo, false);
+        show(secFluxo, true);
+        return;
+    }
     if (tipo === 'notas') { show(cardsFin, false); show(secFin, false); show(secBaixo, false); show(secNotas, true); return; }
     if (tipo === 'estoque') { show(cardsFin, false); show(secFin, false); show(secNotas, false); show(secBaixo, true); return; }
     if (tipo === 'apontamento') {
@@ -277,6 +374,8 @@ function exportarExcel() {
     const sections = [
       { key: 'resumo', id: 'rel-sec-resumo', sheet: 'Resumo' },
       { key: 'financeiro', id: 'rel-sec-financeiro', sheet: 'Financeiro' },
+      { key: 'dre', id: 'rel-sec-dre', sheet: 'DRE' },
+      { key: 'fluxo', id: 'rel-sec-fluxo', sheet: 'FluxoCaixa' },
       { key: 'notas', id: 'rel-sec-notas', sheet: 'NotasEntrada' },
       { key: 'estoque', id: 'rel-sec-estoque', sheet: 'BaixoEstoque' },
       { key: 'apontamento', id: 'rel-sec-apontamento', sheet: 'Apontamento' },
