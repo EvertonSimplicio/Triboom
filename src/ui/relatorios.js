@@ -1,6 +1,6 @@
 import { $ } from '../utils/dom.js';
 import { money } from '../utils/format.js';
-import { state } from '../state.js';
+import { state, getRole, ROLES } from '../state.js';
 import { Backend } from '../services/backend.js';
 
 // Helpers locais (evita dependência circular)

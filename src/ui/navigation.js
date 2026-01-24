@@ -1,8 +1,14 @@
 import { $ } from '../utils/dom.js';
 import { money } from '../utils/format.js';
-import { state } from '../state.js';
+import { state, getRole, allowedViewsForRole, defaultViewForRole } from '../state.js';
 import { Backend } from '../services/backend.js';
 async function navegar(modulo) {
+    const role = getRole();
+    const allowed = allowedViewsForRole(role);
+    if (allowed && !allowed.includes((modulo || '').toLowerCase())) {
+        modulo = defaultViewForRole(role);
+    }
+
     state.route = modulo;
     $('titulo-secao').innerText = modulo.toUpperCase().replace('_', ' ');
 

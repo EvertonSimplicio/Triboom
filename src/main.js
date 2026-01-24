@@ -1,21 +1,22 @@
 import { $ } from './utils/dom.js';
-import { state } from './state.js';
+import { state, getRole, allowedViewsForRole, defaultViewForRole } from './state.js';
 import { Backend } from './services/backend.js';
 import { navegar, renderProdutos, renderFinanceiro } from './ui/navigation.js';
 import { initModals } from './ui/modals.js';
 
 function aplicarPermissoesUI() {
-  const perfil = String(state.user?.perfil || '').toLowerCase();
+  const role = getRole();
+  const allowed = allowedViewsForRole(role); // null = tudo
 
-  // Usuário (funcionário): só pode lançar apontamento
-  if (perfil === 'usuario') {
-    document.querySelectorAll('.sidebar li').forEach(li => {
-      const r = (li.dataset.route || '').toLowerCase();
-      li.style.display = (r === 'apontamento') ? 'flex' : 'none';
-    });
-  } else {
-    document.querySelectorAll('.sidebar li').forEach(li => li.style.display = 'flex');
-  }
+  document.querySelectorAll('.sidebar li[data-route]').forEach(li => {
+    const route = (li.dataset.route || '').toLowerCase();
+    if (!route) return;
+    if (!allowed) {
+      li.style.display = '';
+      return;
+    }
+    li.style.display = allowed.includes(route) ? '' : 'none';
+  });
 }
 
 async function initApp() {
