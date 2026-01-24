@@ -243,6 +243,43 @@
           }
         }
 
+
+
+/* ===== IMPRESSÃO (RELATÓRIOS) ===== */
+@media print {
+  /* remove layout geral e menu */
+  body { background: #fff !important; }
+  .sidebar, #sidebar, .menu-lateral, #menu-lateral, .navbar, .topbar, .header, .app-header { display: none !important; }
+  .main-content, .content, #app { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+
+  /* imprime apenas o conteúdo do relatório */
+  .view-section { display: none !important; }
+  #view-relatorios { display: block !important; }
+
+  /* remove filtros/botões e cards */
+  #view-relatorios .toolbar,
+  #view-relatorios .cards-resumo,
+  #view-relatorios .card,
+  #view-relatorios .card-resumo,
+  #view-relatorios .relatorio-cards,
+  #view-relatorios .btn-action,
+  #view-relatorios button,
+  #view-relatorios select,
+  #view-relatorios input { display: none !important; }
+
+  /* garante que as seções/tabelas fiquem 100% */
+  #view-relatorios .relatorio-section,
+  #view-relatorios table { width: 100% !important; }
+  #view-relatorios table { border-collapse: collapse !important; font-size: 11px !important; }
+  #view-relatorios th, #view-relatorios td { padding: 6px 8px !important; }
+
+  /* quebra de página amigável */
+  #view-relatorios table { page-break-inside: auto; }
+  #view-relatorios tr { page-break-inside: avoid; page-break-after: auto; }
+  #view-relatorios thead { display: table-header-group; }
+  #view-relatorios tfoot { display: table-footer-group; }
+}
+
 </style>
 </head>
 <body>
