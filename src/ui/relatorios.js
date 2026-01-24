@@ -358,11 +358,44 @@ function exportarExcel() {
 
 function imprimir() {
   // Imprime somente o conteúdo do relatório (sem cards/controles)
-  document.body.classList.add('print-mode-relatorios');
-  const cleanup = () => document.body.classList.remove('print-mode-relatorios');
+  // Mais robusto: garante que o DOM aplicou a classe antes do print (reflow + rAF).
+  const enable = () => document.body.classList.add('print-mode-relatorios');
+  const disable = () => document.body.classList.remove('print-mode-relatorios');
+
+  enable();
+  // força reflow
+  void document.body.offsetHeight;
+
+  const cleanup = () => {
+    // Em alguns navegadores o afterprint pode disparar sem foco; mantém idempotente.
+    disable();
+  };
   window.addEventListener('afterprint', cleanup, { once: true });
-  setTimeout(() => window.print(), 50);
+
+  // 2 frames pra garantir layout aplicado
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        window.print();
+      } catch (e) {
+        // fallback
+        setTimeout(() => window.print(), 0);
+      }
+    });
+  });
 }
+
+// Se o usuário usar Ctrl+P / menu do navegador dentro de Relatórios,
+// ativa o modo de impressão automaticamente.
+window.addEventListener('beforeprint', () => {
+  const view = document.getElementById('view-relatorios');
+  if (view && view.classList.contains('active')) {
+    document.body.classList.add('print-mode-relatorios');
+  }
+});
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('print-mode-relatorios');
+});
 
 if (typeof window !== "undefined") {
   window.Relatorios = window.Relatorios || {};

@@ -105,30 +105,76 @@ header { background: white; padding: 15px 30px; box-shadow: 0 2px 5px rgba(0,0,0
    Impressão (Relatórios)
    ============================= */
 @media print {
-  body.print-mode-relatorios #sidebar,
+  /*
+    Objetivo: ao imprimir, mostrar apenas o conteúdo do relatório (tabelas)
+    e esconder filtros, botões, cards, menu lateral e cabeçalhos.
+
+    - print-mode-relatorios: quando o usuário clica no botão "Imprimir" do sistema
+    - fallback: #view-relatorios.active, caso o usuário use o menu do navegador
+  */
+
+  /* Remove layout/menus (também serve como fallback se o usuário imprimir pelo menu do navegador) */
+  nav.sidebar,
+  .sidebar,
+  .sidebar-backdrop,
+  .topbar,
+  header,
+  .mobile-topbar,
+  .btn-logout,
+  body.print-mode-relatorios nav.sidebar,
   body.print-mode-relatorios .sidebar,
+  body.print-mode-relatorios .sidebar-backdrop,
   body.print-mode-relatorios .topbar,
   body.print-mode-relatorios header,
+  body.print-mode-relatorios .mobile-topbar,
+  body.print-mode-relatorios .btn-logout {
+    display: none !important;
+  }
+
+  /* Esconde controles e cards do Relatórios */
+  body.print-mode-relatorios #view-relatorios .toolbar,
   body.print-mode-relatorios #view-relatorios .rel-top,
   body.print-mode-relatorios #view-relatorios .rel-toolbar,
   body.print-mode-relatorios #view-relatorios .btn,
   body.print-mode-relatorios #view-relatorios button,
+  body.print-mode-relatorios #view-relatorios #relatorios-cards,
+  body.print-mode-relatorios #view-relatorios #rel-cards-fin,
+  body.print-mode-relatorios #view-relatorios #rel-cards-estoque,
+  body.print-mode-relatorios #view-relatorios #rel-cards-notas,
   body.print-mode-relatorios #view-relatorios .card,
   body.print-mode-relatorios #view-relatorios .cards,
   body.print-mode-relatorios #view-relatorios .kpi,
   body.print-mode-relatorios #view-relatorios .kpi-card,
   body.print-mode-relatorios #view-relatorios .rel-cards,
   body.print-mode-relatorios #view-relatorios #rel-sec-resumo,
-  body.print-mode-relatorios #view-relatorios .no-print {
+  body.print-mode-relatorios #view-relatorios .no-print,
+  #view-relatorios.active .toolbar,
+  #view-relatorios.active #relatorios-cards,
+  #view-relatorios.active #rel-cards-fin,
+  #view-relatorios.active #rel-cards-estoque,
+  #view-relatorios.active #rel-cards-notas {
     display: none !important;
   }
 
-  body.print-mode-relatorios #view-relatorios {
+  /* Ajustes gerais para impressão */
+  body {
+    background: #fff !important;
+  }
+
+  .dashboard-container,
+  .content-box {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  body.print-mode-relatorios #view-relatorios,
+  #view-relatorios.active {
     padding: 0 !important;
     margin: 0 !important;
   }
 
-  body.print-mode-relatorios #view-relatorios table {
+  body.print-mode-relatorios #view-relatorios table,
+  #view-relatorios.active table {
     width: 100% !important;
     font-size: 12px !important;
   }
