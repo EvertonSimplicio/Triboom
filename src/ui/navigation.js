@@ -22,7 +22,7 @@ async function navegar(modulo) {
 
     // Esconde todas as views
     ['view-padrao', 'view-usuarios', 'view-produtos', 'view-configuracoes', 'view-notas-entrada',
-        'view-financeiro', 'view-relatorios', 'view-funcionarios', 'view-fornecedores', 'view-apontamento'].forEach(v => {
+        'view-financeiro', 'view-caixa', 'view-relatorios', 'view-funcionarios', 'view-fornecedores', 'view-apontamento'].forEach(v => {
         const el = $(v); if (el) el.style.display = 'none';
     });
 
@@ -34,6 +34,16 @@ async function navegar(modulo) {
         $('view-financeiro').style.display = 'block';
         injetarControlesFinanceiros();
         renderFinanceiro(await Backend.getFinanceiro());
+    } else if (modulo === 'caixa') {
+        $('view-caixa').style.display = 'block';
+        try {
+            const { prepararCaixa, renderCaixa } = await import('./caixa.js');
+            await prepararCaixa();
+            await renderCaixa();
+        } catch (e) {
+            console.error('Erro ao carregar caixa:', e);
+            alert('Erro ao carregar caixa: ' + (e?.message || e));
+        }
     } else if (modulo === 'apontamento') {
         $('view-apontamento').style.display = 'block';
         try {

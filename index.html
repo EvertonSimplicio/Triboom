@@ -306,6 +306,7 @@
                 <li data-route="produtos"><span class="material-icons">inventory_2</span> Produtos & Estoque</li>
                 <li data-route="notas_entrada"><span class="material-icons">receipt_long</span> Notas de Entrada</li>
                 <li data-route="financeiro"><span class="material-icons">attach_money</span> Financeiro</li>
+                <li data-route="caixa"><span class="material-icons">point_of_sale</span> Caixa</li>
                                 <li data-route="apontamento"><span class="material-icons">schedule</span> Apontamento</li>
 <li data-route="relatorios"><span class="material-icons">bar_chart</span> Relatórios</li>
                 <li data-route="funcionarios"><span class="material-icons">badge</span> Funcionários</li>
@@ -392,6 +393,68 @@
                     <tbody id="tabela-financeiro-corpo"></tbody>
                 </table>
             </div>
+
+            <div id="view-caixa" class="view-section" style="display:none;">
+                <div class="toolbar" style="align-items:flex-end; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+                    <div style="display:flex; flex-direction:column; min-width:170px;">
+                        <label style="font-size:12px; opacity:.8;">Data</label>
+                        <input type="date" id="caixa-data" />
+                    </div>
+                    <div style="display:flex; flex-direction:column; min-width:220px; flex:1;">
+                        <label style="font-size:12px; opacity:.8;">Sorveteria</label>
+                        <input type="text" id="caixa-loja" placeholder="Ex: Triboom Centro" list="caixa-lojas" />
+                        <datalist id="caixa-lojas"></datalist>
+                    </div>
+                    <div style="display:flex; flex-direction:column; min-width:160px;">
+                        <label style="font-size:12px; opacity:.8;">Tipo</label>
+                        <select id="caixa-tipo">
+                            <option value="ENTRADA">Entrada</option>
+                            <option value="SAIDA">Saída</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; flex-direction:column; min-width:160px;">
+                        <label style="font-size:12px; opacity:.8;">Forma</label>
+                        <select id="caixa-forma">
+                            <option value="Dinheiro">Dinheiro</option>
+                            <option value="Cartão">Cartão</option>
+                            <option value="Pix">Pix</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; flex-direction:column; min-width:260px; flex:2;">
+                        <label style="font-size:12px; opacity:.8;">Descrição</label>
+                        <input type="text" id="caixa-descricao" placeholder="Ex: sangria, troco, vendas do dia..." />
+                    </div>
+                    <div style="display:flex; flex-direction:column; min-width:140px;">
+                        <label style="font-size:12px; opacity:.8;">Valor</label>
+                        <input type="text" id="caixa-valor" placeholder="0,00" />
+                    </div>
+                    <button class="btn-action btn-add" id="btnCaixaSalvar"><span class="material-icons">save</span> Salvar</button>
+                    <button class="btn-action" id="btnCaixaAtualizar"><span class="material-icons">refresh</span> Atualizar</button>
+                </div>
+
+                <div style="display:flex; gap:20px; margin-bottom:15px; font-weight:bold; flex-wrap:wrap;">
+                    <span style="color:#27ae60">Entradas: <span id="caixa-total-entradas">R$ 0,00</span></span>
+                    <span style="color:#e74c3c">Saídas: <span id="caixa-total-saidas">R$ 0,00</span></span>
+                    <span style="color:#2c3e50">Saldo: <span id="caixa-total-saldo">R$ 0,00</span></span>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Sorveteria</th>
+                            <th>Tipo</th>
+                            <th>Forma</th>
+                            <th>Descrição</th>
+                            <th>Valor</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-caixa-corpo"></tbody>
+                </table>
+            </div>
+
             <div id="view-apontamento" class="view-section">
                 <div class="toolbar">
                     <select id="apontamento-funcionario"></select>
