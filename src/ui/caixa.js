@@ -1,5 +1,6 @@
 import { Backend } from '../services/backend.js';
-import { State } from '../state.js';
+// state.js exporta  (minúsculo). Aqui usamos um alias para manter o restante do código.
+import { state as State } from '../state.js';
 import { money, localDateISO } from '../utils/format.js';
 
 let _iniciado = false;
@@ -57,6 +58,18 @@ function _isoToBR(iso) {
 
 function _moneyCell(v) {
   return `<span class="money">${money(v)}</span>`;
+}
+
+function _atualizarModoLoteUI() {
+  const chk = _el('caixa-modo-lote');
+  const isLote = !!chk?.checked;
+  const boxLote = _el('caixa-lote-box');
+  const singles = document.querySelectorAll('.caixa-single');
+
+  if (boxLote) boxLote.style.display = isLote ? 'grid' : 'none';
+  singles.forEach((el) => {
+    el.style.display = isLote ? 'none' : '';
+  });
 }
 
 async function _carregarLista() {
@@ -134,38 +147,80 @@ async function _carregarLista() {
 async function _salvarLancamento() {
   const data = _el('caixa-data')?.value || localDateISO();
   const loja = (_el('caixa-loja')?.value || '').trim();
-  const tipo = (_el('caixa-tipo')?.value || 'ENTRADA').toUpperCase();
-  const forma = (_el('caixa-forma')?.value || 'Dinheiro').trim();
-  const descUser = (_el('caixa-descricao')?.value || '').trim();
-  const valorStr = _el('caixa-valor')?.value;
-  const valor = _parseValorBR(valorStr);
+
+  const isLote = !!_el('caixa-modo-lote')?.checked;
 
   if (!loja) return alert('Informe a sorveteria do caixa.');
-  if (!descUser) return alert('Informe uma descrição.');
-  if (!Number.isFinite(valor) || valor <= 0) return alert('Informe um valor válido.');
 
   const user = State.getCurrentUser();
-  const registro = {
-    data_emissao: data,
-    data_vencimento: data,
-    fornecedor: loja,
-    descricao: `${TAG_CAIXA} (${forma}) ${descUser}`,
-    tipo: tipo === 'ENTRADA' ? 'Receita' : 'Despesa',
-    valor,
-    status: 'Pago',
-    usuario: user?.login || user?.nome || '',
-  };
+  const usuario = user?.login || user?.nome || '';
 
   const btn = _el('btn-caixa-salvar');
   if (btn) btn.disabled = true;
   try {
     _saveLoja(loja);
     _renderLojaDatalist();
-    await Backend.salvarFinanceiro(registro);
-    _el('caixa-descricao').value = '';
-    _el('caixa-valor').value = '';
+
+    if (isLote) {
+      const obs = (_el('caixa-lote-obs')?.value || '').trim();
+      const valores = [
+        { forma: 'Cartão Crédito', v: _parseValorBR(_el('caixa-lote-credito')?.value) },
+        { forma: 'Cartão Débito', v: _parseValorBR(_el('caixa-lote-debito')?.value) },
+        { forma: 'Pix', v: _parseValorBR(_el('caixa-lote-pix')?.value) },
+        { forma: 'Dinheiro', v: _parseValorBR(_el('caixa-lote-dinheiro')?.value) },
+      ].filter((x) => Number.isFinite(x.v) && x.v > 0);
+
+      if (valores.length === 0) {
+        return alert('Preencha pelo menos um valor (crédito, débito, pix ou dinheiro).');
+      }
+
+      for (const item of valores) {
+        const registro = {
+          data_emissao: data,
+          data_vencimento: data,
+          fornecedor: loja,
+          descricao: `${TAG_CAIXA} (${item.forma}) ${obs || 'Vendas do dia'}`,
+          tipo: 'Receita',
+          valor: item.v,
+          status: 'Pago',
+          usuario,
+        };
+        await Backend.salvarFinanceiro(registro);
+      }
+
+      // limpa campos do lote
+      ['caixa-lote-credito', 'caixa-lote-debito', 'caixa-lote-pix', 'caixa-lote-dinheiro', 'caixa-lote-obs'].forEach((id) => {
+        const el = _el(id);
+        if (el) el.value = '';
+      });
+    } else {
+      const tipo = (_el('caixa-tipo')?.value || 'ENTRADA').toUpperCase();
+      const forma = (_el('caixa-forma')?.value || 'Dinheiro').trim();
+      const descUser = (_el('caixa-descricao')?.value || '').trim();
+      const valorStr = _el('caixa-valor')?.value;
+      const valor = _parseValorBR(valorStr);
+
+      if (!descUser) return alert('Informe uma descrição.');
+      if (!Number.isFinite(valor) || valor <= 0) return alert('Informe um valor válido.');
+
+      const registro = {
+        data_emissao: data,
+        data_vencimento: data,
+        fornecedor: loja,
+        descricao: `${TAG_CAIXA} (${forma}) ${descUser}`,
+        tipo: tipo === 'ENTRADA' ? 'Receita' : 'Despesa',
+        valor,
+        status: 'Pago',
+        usuario,
+      };
+
+      await Backend.salvarFinanceiro(registro);
+      _el('caixa-descricao').value = '';
+      _el('caixa-valor').value = '';
+    }
+
     await _carregarLista();
-    alert('Lançamento de caixa salvo!');
+    alert('Caixa salvo!');
   } catch (err) {
     console.error(err);
     alert(`Erro ao salvar lançamento: ${err?.message || err}`);
@@ -183,6 +238,9 @@ export function prepararCaixa() {
   if (inpData && !inpData.value) inpData.value = localDateISO();
 
   _renderLojaDatalist();
+
+  _el('caixa-modo-lote')?.addEventListener('change', _atualizarModoLoteUI);
+  _atualizarModoLoteUI();
 
   _el('btn-caixa-salvar')?.addEventListener('click', _salvarLancamento);
   _el('btn-caixa-atualizar')?.addEventListener('click', _carregarLista);

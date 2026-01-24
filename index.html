@@ -405,14 +405,48 @@
                         <input type="text" id="caixa-loja" placeholder="Ex: Triboom Centro" list="caixa-lojas" />
                         <datalist id="caixa-lojas"></datalist>
                     </div>
-                    <div style="display:flex; flex-direction:column; min-width:160px;">
+
+                    <div style="display:flex; flex-direction:column; min-width:230px;">
+                        <label style="font-size:12px; opacity:.8;">Modo</label>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:13px; padding:10px 12px; border:1px solid #e6e6e6; border-radius:10px; background:#fff;">
+                            <input type="checkbox" id="caixa-modo-lote" />
+                            Lançar vendas do dia (vários valores)
+                        </label>
+                    </div>
+
+                    <div id="caixa-lote-box" style="display:none; flex:2; min-width:420px;">
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <div style="display:flex; flex-direction:column; min-width:160px; flex:1;">
+                                <label style="font-size:12px; opacity:.8;">Cartão crédito</label>
+                                <input type="text" id="caixa-lote-credito" placeholder="0,00" />
+                            </div>
+                            <div style="display:flex; flex-direction:column; min-width:160px; flex:1;">
+                                <label style="font-size:12px; opacity:.8;">Cartão débito</label>
+                                <input type="text" id="caixa-lote-debito" placeholder="0,00" />
+                            </div>
+                            <div style="display:flex; flex-direction:column; min-width:160px; flex:1;">
+                                <label style="font-size:12px; opacity:.8;">Pix</label>
+                                <input type="text" id="caixa-lote-pix" placeholder="0,00" />
+                            </div>
+                            <div style="display:flex; flex-direction:column; min-width:160px; flex:1;">
+                                <label style="font-size:12px; opacity:.8;">Dinheiro</label>
+                                <input type="text" id="caixa-lote-dinheiro" placeholder="0,00" />
+                            </div>
+                            <div style="display:flex; flex-direction:column; min-width:260px; flex:2;">
+                                <label style="font-size:12px; opacity:.8;">Observação (opcional)</label>
+                                <input type="text" id="caixa-lote-obs" placeholder="Ex: fechamento do dia" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="caixa-single" style="display:flex; flex-direction:column; min-width:160px;">
                         <label style="font-size:12px; opacity:.8;">Tipo</label>
                         <select id="caixa-tipo">
                             <option value="ENTRADA">Entrada</option>
                             <option value="SAIDA">Saída</option>
                         </select>
                     </div>
-                    <div style="display:flex; flex-direction:column; min-width:160px;">
+                    <div class="caixa-single" style="display:flex; flex-direction:column; min-width:160px;">
                         <label style="font-size:12px; opacity:.8;">Forma</label>
                         <select id="caixa-forma">
                             <option value="Dinheiro">Dinheiro</option>
@@ -421,11 +455,11 @@
                             <option value="Outros">Outros</option>
                         </select>
                     </div>
-                    <div style="display:flex; flex-direction:column; min-width:260px; flex:2;">
+                    <div class="caixa-single" style="display:flex; flex-direction:column; min-width:260px; flex:2;">
                         <label style="font-size:12px; opacity:.8;">Descrição</label>
                         <input type="text" id="caixa-descricao" placeholder="Ex: sangria, troco, vendas do dia..." />
                     </div>
-                    <div style="display:flex; flex-direction:column; min-width:140px;">
+                    <div class="caixa-single" style="display:flex; flex-direction:column; min-width:140px;">
                         <label style="font-size:12px; opacity:.8;">Valor</label>
                         <input type="text" id="caixa-valor" placeholder="0,00" />
                     </div>

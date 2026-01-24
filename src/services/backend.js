@@ -368,6 +368,81 @@ async criarApontamento(payload) {
         return trocarSenhaUsuario(usuarioId, senhaAtual, senhaNova);
     }
 
+    ,
+
+    // -------------------------
+    // CAIXA (lançamentos do dia)
+    // -------------------------
+    _getCaixaTableNames() {
+        // Ajuste aqui se sua tabela tiver outro nome
+        return ['caixa_lancamentos', 'caixa'];
+    },
+
+    async _fromFirstExistingTable(op) {
+        const db = getDb();
+        let lastError = null;
+        for (const table of Backend._getCaixaTableNames()) {
+            try {
+                const result = await op(db, table);
+                // Se o Supabase retornou erro de tabela/coluna inexistente, tenta a próxima.
+                if (result && result.error) {
+                    lastError = result.error;
+                    const msg = (result.error.message || '').toLowerCase();
+                    const code = result.error.code || '';
+                    const isMissing = msg.includes('could not find') || msg.includes('relation') || msg.includes('does not exist') || code === 'PGRST205' || code === '42P01';
+                    if (isMissing) continue;
+                    throw result.error;
+                }
+                return result;
+            } catch (e) {
+                lastError = e;
+                const msg = (e && e.message ? e.message : '').toLowerCase();
+                const code = e && e.code ? e.code : '';
+                const isMissing = msg.includes('could not find') || msg.includes('relation') || msg.includes('does not exist') || code === 'PGRST205' || code === '42P01';
+                if (isMissing) continue;
+                throw e;
+            }
+        }
+        if (lastError) throw lastError;
+        throw new Error('Tabela de caixa não encontrada no Supabase.');
+    },
+
+    async getCaixaLancamentos({ dataISO, centro }) {
+        const { data, error } = await Backend._fromFirstExistingTable((db, table) =>
+            db
+                .from(table)
+                .select('*')
+                .eq('data', dataISO)
+                .eq('centro', centro)
+                .order('created_at', { ascending: true })
+        );
+        if (error) throw error;
+        return data || [];
+    },
+
+    async salvarCaixaLancamento(payload) {
+        const { data, error } = await Backend._fromFirstExistingTable((db, table) =>
+            db
+                .from(table)
+                .insert([payload])
+                .select('*')
+                .single()
+        );
+        if (error) throw error;
+        return data;
+    },
+
+    async excluirCaixaLancamento(id) {
+        const { error } = await Backend._fromFirstExistingTable((db, table) =>
+            db
+                .from(table)
+                .delete()
+                .eq('id', id)
+        );
+        if (error) throw error;
+        return true;
+    }
+
 };
 
 export { Backend };
