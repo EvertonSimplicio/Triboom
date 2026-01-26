@@ -101,6 +101,11 @@ const Backend = {
     },
 
     // --- FINANCEIRO ---
+    // Compat: alguns módulos (ex.: Caixa) chamam listarFinanceiro().
+    // Mantemos como alias para getFinanceiro() para não quebrar.
+    async listarFinanceiro() {
+        return await this.getFinanceiro();
+    },
     async getFinanceiro() {
         const db = getDb();
         const { data } = await db.from('financeiro').select('*').order('data_vencimento', { ascending: false });

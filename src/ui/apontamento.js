@@ -115,6 +115,12 @@ export async function prepararApontamento() {
   if (!sel) return;
 
   sel.innerHTML = '';
+  // Funcionário: trava o select e mostra apenas o funcionário vinculado ao login
+  if (isFuncionario) {
+    sel.disabled = true;
+  } else {
+    sel.disabled = false;
+  }
 
   const funcionariosAtivos = (state.funcionarios || []).filter(_isFuncionarioAtivo);
 
@@ -130,10 +136,31 @@ export async function prepararApontamento() {
   }
 
   const perfil = String(state.user?.perfil || '').toLowerCase();
-  const isUser = (perfil === 'usuario');
+  const isAdmin = (perfil === 'admin' || perfil === 'administrador');
+  const isFuncionario = (perfil === 'funcionario');
+  const isUsuario = (perfil === 'usuario');
+
+  // Controle de acesso:
+  // - Admin: gerencia e pode corrigir horários
+  // - Funcionário: só pode lançar/editar o próprio apontamento
+  // - Usuário: somente visualização de relatórios (sem acesso ao apontamento)
+  if (isUsuario) {
+    const area = document.getElementById('conteudo');
+    if (area) {
+      area.innerHTML = `
+        <div class="card">
+          <div class="card-body">
+            <h4>Acesso restrito</h4>
+            <p>Seu perfil é <b>Usuário</b>. Você pode apenas visualizar relatórios.</p>
+          </div>
+        </div>`;
+    }
+    return;
+  }
+
   const myFunc = state.user?.funcionario_id;
 
-  if (isUser) {
+  if (isFuncionario) {
     // Funcionário: só pode lançar para si mesmo
     if (!myFunc) {
       const opt = document.createElement('option');
@@ -181,7 +208,6 @@ export async function prepararApontamento() {
 
 
   // Botão "Corrigir" (somente Admin) - ativa modo correção e libera edição manual
-  const isAdmin = (perfil === 'admin');
   const btnEditar = $('btnApEditar');
   if (btnEditar) {
     btnEditar.style.display = isAdmin ? '' : 'none';
@@ -221,15 +247,15 @@ export async function prepararApontamento() {
 
     const salvar = () => {
       const perfil = String(state.user?.perfil || '').toLowerCase();
-      const isUser = (perfil === 'usuario');
-      if (!isUser && _adminEditMode) return salvarApontamentoAdminCorrecao();
+      const isFuncionario = (perfil === 'funcionario');
+      if (!isFuncionario && _adminEditMode) return salvarApontamentoAdminCorrecao();
       return salvarApontamentoManual();
     };
     if (btnSalvar) btnSalvar.onclick = salvar;
     if (inpSaida) inpSaida.onchange = () => {
       const perfil = String(state.user?.perfil || '').toLowerCase();
-      const isUser = (perfil === 'usuario');
-      if (isUser) salvar();
+      const isFuncionario = (perfil === 'funcionario');
+      if (isFuncionario) salvar();
     };
 
     const inpData = $('ap-man-data');
@@ -304,10 +330,10 @@ export async function carregarApontamentoDia() {
 
     
     const perfil = String(state.user?.perfil || '').toLowerCase();
-    const isUser = (perfil === 'usuario');
+    const isFuncionario = (perfil === 'funcionario');
     const btnSalvar = $('btnApSalvarManual');
 
-    const isAdmin = !isUser;
+    const isAdmin = !isFuncionario;
     // Admin em modo correção: libera edição e permite sobrescrever
     if (isAdmin && _adminEditMode) {
       if (btnSalvar) btnSalvar.disabled = false;
@@ -350,7 +376,7 @@ export async function carregarApontamentoDia() {
     }
 
     // Se for funcionário e a data já tem registro, trava edição
-    if (isUser && btnSalvar?.disabled) {
+    if (isFuncionario && btnSalvar?.disabled) {
       ['ap-man-entrada','ap-man-int-ini','ap-man-int-fim','ap-man-saida'].forEach(id => {
         const el = $(id);
         if (el) el.disabled = true;
@@ -702,4 +728,3 @@ async function salvarApontamentoAdminCorrecao() {
     _setApStatus('❌ Erro ao salvar correção: ' + (e?.message || ''));
   }
 }
-

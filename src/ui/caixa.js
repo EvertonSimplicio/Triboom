@@ -1,259 +1,213 @@
 import { Backend } from '../services/backend.js';
-// state.js exporta  (minúsculo). Aqui usamos um alias para manter o restante do código.
-import { state as State } from '../state.js';
-import { money, localDateISO } from '../utils/format.js';
+import { state } from '../state.js';
+import { money, localDateISO, toast } from '../utils/format.js';
 
-let _iniciado = false;
-
-const TAG_CAIXA = '[CAIXA]';
-
-function _el(id) {
-  return document.getElementById(id);
+// Mantém compatibilidade com o navigation.js
+export async function prepararCaixa() {
+  return true;
 }
 
-function _getLojasSalvas() {
-  try {
-    const raw = localStorage.getItem('triboom_caixa_lojas');
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
+const $ = (id) => document.getElementById(id);
+
+function getPerfil() {
+  return (state.user?.perfil || '').toString().trim().toUpperCase();
+}
+function isAdmin() {
+  const p = getPerfil();
+  return p === 'ADMINISTRADOR' || p === 'ADMIN';
 }
 
-function _saveLoja(nome) {
-  const loja = (nome || '').trim();
-  if (!loja) return;
-  const atual = _getLojasSalvas();
-  const novo = [loja, ...atual.filter((x) => (x || '').trim().toLowerCase() !== loja.toLowerCase())].slice(0, 20);
-  localStorage.setItem('triboom_caixa_lojas', JSON.stringify(novo));
+function parseValorBR(v) {
+  if (v == null) return 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  // aceita 1.234,56 ou 1234.56
+  const norm = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(norm);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function _renderLojaDatalist() {
-  const dl = _el('caixa-lojas');
-  if (!dl) return;
-  const lojas = _getLojasSalvas();
-  dl.innerHTML = lojas.map((l) => `<option value="${String(l).replaceAll('"', '&quot;')}"></option>`).join('');
+function toISODate(value) {
+  if (!value) return '';
+  const v = String(value).trim();
+  if (!v) return '';
+  // input type="date" retorna YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  // aceita DD/MM/YYYY
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return v;
 }
 
-function _parseValorBR(str) {
-  // Aceita: 1234,56 | 1.234,56 | 1234.56
-  const s = String(str || '').trim();
-  if (!s) return NaN;
-  const normal = s
-    .replace(/\s/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  const n = Number(normal);
-  return Number.isFinite(n) ? n : NaN;
-}
-
-function _isoToBR(iso) {
-  // yyyy-mm-dd -> dd/mm/yyyy
-  const v = String(iso || '');
-  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return v;
-  return `${m[3]}/${m[2]}/${m[1]}`;
-}
-
-function _moneyCell(v) {
-  return `<span class="money">${money(v)}</span>`;
-}
-
-function _atualizarModoLoteUI() {
-  const chk = _el('caixa-modo-lote');
-  const isLote = !!chk?.checked;
-  const boxLote = _el('caixa-lote-box');
-  const singles = document.querySelectorAll('.caixa-single');
-
-  if (boxLote) boxLote.style.display = isLote ? 'grid' : 'none';
-  singles.forEach((el) => {
-    el.style.display = isLote ? 'none' : '';
-  });
-}
-
-async function _carregarLista() {
-  const data = _el('caixa-data')?.value || localDateISO();
-  const loja = (_el('caixa-loja')?.value || '').trim();
-
-  const tbody = _el('tabela-caixa-corpo');
-  const lblEntradas = _el('caixa-total-entradas');
-  const lblSaidas = _el('caixa-total-saidas');
-  const lblSaldo = _el('caixa-total-saldo');
-
-  if (tbody) tbody.innerHTML = '<tr><td colspan="6">Carregando...</td></tr>';
+async function carregarLista() {
+  const dataISO = toISODate($('caixa-data')?.value);
+  if (!dataISO) return;
 
   try {
-    const todos = await Backend.listarFinanceiro();
-    const lista = (todos || [])
-      .filter((r) => {
-        const d = (r.data_vencimento || r.data || '').slice(0, 10);
-        if (d !== data) return false;
-        const desc = String(r.descricao || '');
-        if (!desc.includes(TAG_CAIXA)) return false;
-        if (!loja) return true;
-        return String(r.fornecedor || '').trim().toLowerCase() === loja.toLowerCase();
-      })
-      .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+    const lista = await Backend.getCaixaLancamentos({ dataISO });
+    const tbody = $('caixa-tbody');
+    if (!tbody) return;
 
-    let totalEntradas = 0;
-    let totalSaidas = 0;
+    let entradas = 0;
+    let saidas = 0;
 
-    const rows = lista.map((r) => {
-      const tipo = String(r.tipo || '').toUpperCase();
-      const valor = Number(r.valor || 0);
-      if (tipo === 'RECEITA') totalEntradas += valor;
-      else totalSaidas += valor;
-
-      const status = r.status ? String(r.status) : '';
-      const desc = String(r.descricao || '').replace(TAG_CAIXA, '').trim();
-
-      return `
-        <tr>
-          <td>${_isoToBR((r.data_vencimento || '').slice(0, 10))}</td>
-          <td>${r.fornecedor || ''}</td>
-          <td>${tipo === 'RECEITA' ? 'Entrada' : 'Saída'}</td>
-          <td>${desc}</td>
-          <td>${_moneyCell(valor)}</td>
-          <td>
-            <button class="btn btn-sm btn-danger" data-id="${r.id}" title="Excluir">Excluir</button>
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-    if (tbody) {
-      tbody.innerHTML = rows || '<tr><td colspan="6">Nenhum lançamento.</td></tr>';
-      tbody.querySelectorAll('button[data-id]')?.forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-id');
-          if (!id) return;
-          if (!confirm('Excluir este lançamento de caixa?')) return;
-          await Backend.excluirFinanceiro(id);
-          await _carregarLista();
-        });
-      });
-    }
-
-    if (lblEntradas) lblEntradas.textContent = money(totalEntradas);
-    if (lblSaidas) lblSaidas.textContent = money(totalSaidas);
-    if (lblSaldo) lblSaldo.textContent = money(totalEntradas - totalSaidas);
-  } catch (err) {
-    console.error(err);
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6">Erro ao carregar lançamentos.</td></tr>';
-  }
-}
-
-async function _salvarLancamento() {
-  const data = _el('caixa-data')?.value || localDateISO();
-  const loja = (_el('caixa-loja')?.value || '').trim();
-
-  const isLote = !!_el('caixa-modo-lote')?.checked;
-
-  if (!loja) return alert('Informe a sorveteria do caixa.');
-
-  const user = State.getCurrentUser();
-  const usuario = user?.login || user?.nome || '';
-
-  const btn = _el('btn-caixa-salvar');
-  if (btn) btn.disabled = true;
-  try {
-    _saveLoja(loja);
-    _renderLojaDatalist();
-
-    if (isLote) {
-      const obs = (_el('caixa-lote-obs')?.value || '').trim();
-      const valores = [
-        { forma: 'Cartão Crédito', v: _parseValorBR(_el('caixa-lote-credito')?.value) },
-        { forma: 'Cartão Débito', v: _parseValorBR(_el('caixa-lote-debito')?.value) },
-        { forma: 'Pix', v: _parseValorBR(_el('caixa-lote-pix')?.value) },
-        { forma: 'Dinheiro', v: _parseValorBR(_el('caixa-lote-dinheiro')?.value) },
-      ].filter((x) => Number.isFinite(x.v) && x.v > 0);
-
-      if (valores.length === 0) {
-        return alert('Preencha pelo menos um valor (crédito, débito, pix ou dinheiro).');
-      }
-
-      for (const item of valores) {
-        const registro = {
-          data_emissao: data,
-          data_vencimento: data,
-          fornecedor: loja,
-          descricao: `${TAG_CAIXA} (${item.forma}) ${obs || 'Vendas do dia'}`,
-          tipo: 'Receita',
-          valor: item.v,
-          status: 'Pago',
-          usuario,
-        };
-        await Backend.salvarFinanceiro(registro);
-      }
-
-      // limpa campos do lote
-      ['caixa-lote-credito', 'caixa-lote-debito', 'caixa-lote-pix', 'caixa-lote-dinheiro', 'caixa-lote-obs'].forEach((id) => {
-        const el = _el(id);
-        if (el) el.value = '';
-      });
+    if (!lista || lista.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7">Nenhum lançamento.</td></tr>`;
     } else {
-      const tipo = (_el('caixa-tipo')?.value || 'ENTRADA').toUpperCase();
-      const forma = (_el('caixa-forma')?.value || 'Dinheiro').trim();
-      const descUser = (_el('caixa-descricao')?.value || '').trim();
-      const valorStr = _el('caixa-valor')?.value;
-      const valor = _parseValorBR(valorStr);
+      tbody.innerHTML = lista.map((l) => {
+        const val = Number(l.valor || 0);
+        if ((l.tipo || '').toLowerCase() === 'saida' || (l.tipo || '').toLowerCase() === 'saída') saidas += val;
+        else entradas += val;
 
-      if (!descUser) return alert('Informe uma descrição.');
-      if (!Number.isFinite(valor) || valor <= 0) return alert('Informe um valor válido.');
-
-      const registro = {
-        data_emissao: data,
-        data_vencimento: data,
-        fornecedor: loja,
-        descricao: `${TAG_CAIXA} (${forma}) ${descUser}`,
-        tipo: tipo === 'ENTRADA' ? 'Receita' : 'Despesa',
-        valor,
-        status: 'Pago',
-        usuario,
-      };
-
-      await Backend.salvarFinanceiro(registro);
-      _el('caixa-descricao').value = '';
-      _el('caixa-valor').value = '';
+        return `
+          <tr>
+            <td>${l.data || ''}</td>
+            <td>${l.sorveteria || ''}</td>
+            <td>${l.tipo || ''}</td>
+            <td>${l.forma || ''}</td>
+            <td>${l.descricao || ''}</td>
+            <td>${money(val)}</td>
+            <td>
+              <button class="btn-icon" data-del-caixa="${l.id}" title="Excluir">🗑</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
-    await _carregarLista();
-    alert('Caixa salvo!');
-  } catch (err) {
-    console.error(err);
-    alert(`Erro ao salvar lançamento: ${err?.message || err}`);
-  } finally {
-    if (btn) btn.disabled = false;
+    $('caixa-total-entradas').textContent = money(entradas);
+    $('caixa-total-saidas').textContent = money(saidas);
+    $('caixa-total-saldo').textContent = money(entradas - saidas);
+
+    // handlers excluir
+    tbody.querySelectorAll('[data-del-caixa]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-del-caixa');
+        if (!id) return;
+        if (!confirm('Excluir lançamento?')) return;
+        try {
+          await Backend.excluirCaixaLancamento(id);
+          toast('Lançamento excluído.');
+          await carregarLista();
+        } catch (e) {
+          console.error('[CAIXA] excluir erro', e);
+          alert('Erro ao excluir lançamento.');
+        }
+      });
+    });
+  } catch (e) {
+    console.error('[CAIXA] carregarLista erro', e);
+    const tbody = $('caixa-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7">Erro ao carregar lançamentos.</td></tr>`;
   }
 }
 
-export function prepararCaixa() {
-  if (_iniciado) return;
-  _iniciado = true;
+function aplicarModo() {
+  const chk = $('caixa-modo-lote');
+  const box = $('caixa-lote-box');
+  const singleGrid = $('caixa-tipo')?.closest('.form-grid');
 
-  // Defaults
-  const inpData = _el('caixa-data');
-  if (inpData && !inpData.value) inpData.value = localDateISO();
+  const isLote = !!chk?.checked;
+  if (box) box.style.display = isLote ? 'block' : 'none';
+  if (singleGrid) singleGrid.style.display = isLote ? 'none' : 'grid';
+}
 
-  _renderLojaDatalist();
+async function salvar() {
+  const dataISO = toISODate($('caixa-data')?.value);
+  if (!dataISO) return alert('Selecione a data.');
+  const sorveteria = ($('caixa-sorveteria')?.value || '').toString().trim();
+  if (!sorveteria) return alert('Informe a sorveteria.');
 
-  _el('caixa-modo-lote')?.addEventListener('change', _atualizarModoLoteUI);
-  _atualizarModoLoteUI();
+  const isLote = !!$('caixa-modo-lote')?.checked;
 
-  _el('btn-caixa-salvar')?.addEventListener('click', _salvarLancamento);
-  _el('btn-caixa-atualizar')?.addEventListener('click', _carregarLista);
-  _el('caixa-loja')?.addEventListener('change', _carregarLista);
-  _el('caixa-data')?.addEventListener('change', _carregarLista);
+  try {
+    if (isLote) {
+      const obs = ($('caixa-observacao')?.value || '').toString().trim();
+      const descricao = obs || 'Vendas do dia';
+
+      const itens = [
+        { id: 'caixa-lote-credito', forma: 'Cartão crédito' },
+        { id: 'caixa-lote-debito', forma: 'Cartão débito' },
+        { id: 'caixa-lote-pix', forma: 'Pix' },
+        { id: 'caixa-lote-dinheiro', forma: 'Dinheiro' },
+      ];
+
+      const promises = [];
+      for (const it of itens) {
+        const val = parseValorBR($(it.id)?.value);
+        if (val > 0) {
+          promises.push(
+            Backend.salvarCaixaLancamento({
+              data: dataISO,
+              sorveteria,
+              tipo: 'Entrada',
+              forma: it.forma,
+              descricao,
+              valor: val,
+            })
+          );
+        }
+      }
+
+      if (promises.length === 0) {
+        return alert('Informe ao menos um valor (crédito, débito, pix ou dinheiro).');
+      }
+
+      await Promise.all(promises);
+
+      // limpa valores
+      itens.forEach((it) => { if ($(it.id)) $(it.id).value = ''; });
+      if ($('caixa-observacao')) $('caixa-observacao').value = '';
+
+      toast('Vendas do dia salvas.');
+    } else {
+      const tipo = ($('caixa-tipo')?.value || '').toString().trim();
+      const forma = ($('caixa-forma')?.value || '').toString().trim();
+      const descricao = ($('caixa-descricao')?.value || '').toString().trim();
+      const valor = parseValorBR($('caixa-valor')?.value);
+
+      if (!tipo) return alert('Selecione o tipo.');
+      if (!forma) return alert('Selecione a forma.');
+      if (!descricao) return alert('Informe a descrição.');
+      if (!valor || valor <= 0) return alert('Informe o valor.');
+
+      await Backend.salvarCaixaLancamento({ data: dataISO, sorveteria, tipo, forma, descricao, valor });
+
+      if ($('caixa-descricao')) $('caixa-descricao').value = '';
+      if ($('caixa-valor')) $('caixa-valor').value = '';
+      if ($('caixa-observacao')) $('caixa-observacao').value = '';
+
+      toast('Lançamento salvo.');
+    }
+
+    await carregarLista();
+  } catch (e) {
+    console.error('[CAIXA] salvar erro', e);
+    alert('Erro ao salvar lançamento.');
+  }
 }
 
 export async function renderCaixa() {
-  const inpData = _el('caixa-data');
-  if (inpData && !inpData.value) inpData.value = localDateISO();
-  _renderLojaDatalist();
-  await _carregarLista();
-}
+  // Perfil: apenas Administrador pode usar o Caixa
+  if (!isAdmin()) {
+    toast('Acesso restrito: Caixa apenas para Administrador.');
+    const tbody = $('caixa-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7">Acesso restrito.</td></tr>`;
+    return;
+  }
 
-// Para debug / uso via console
-window.Caixa = { prepararCaixa, renderCaixa };
+  // defaults
+  const inpData = $('caixa-data');
+  if (inpData && !inpData.value) inpData.value = localDateISO(new Date());
+
+  // listeners
+  if ($('btnCaixaSalvar')) $('btnCaixaSalvar').onclick = salvar;
+  if ($('btnCaixaAtualizar')) $('btnCaixaAtualizar').onclick = carregarLista;
+
+  if ($('caixa-modo-lote')) {
+    $('caixa-modo-lote').addEventListener('change', aplicarModo);
+  }
+
+  aplicarModo();
+  await carregarLista();
+}
