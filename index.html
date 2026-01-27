@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Triboom - Ponto Eletrônico</title>
   <link rel="stylesheet" href="style.css">
-  
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -39,9 +38,9 @@
           <li data-target="dashboard" class="ativo">🏠 Início</li>
           <li data-target="apontamento">⏱️ Apontamento</li>
           <li data-target="relatorios">📊 Relatórios</li>
+          <li data-target="caixa">💰 Caixa</li>
           <li data-target="funcionarios">👥 Funcionários</li>
           <li data-target="usuarios">🔐 Usuários</li>
-          <li data-target="caixa">💰 Caixa</li>
         </ul>
       </nav>
       <div class="sidebar-footer">
@@ -61,6 +60,10 @@
           <div class="card">
             <h3>Funcionários</h3>
             <p id="total-funcs">0</p>
+          </div>
+          <div class="card">
+            <h3>Saldo Caixa</h3>
+            <p id="dash-saldo">R$ 0,00</p>
           </div>
           <div class="card">
             <h3>Hoje</h3>
@@ -96,8 +99,8 @@
             <button id="btnApEditar" style="display:none; margin-top:10px;">Editar Manualmente</button>
         </div>
 
-        <div id="apontamento-manual" style="display:none; border:1px solid #ccc; padding:10px; margin-top:10px;">
-            <h4>Lançamento Manual</h4>
+        <div id="apontamento-manual" style="display:none; border:1px solid #ccc; padding:10px; margin-top:10px; background:white;">
+            <h4>Lançamento Manual (Admin)</h4>
             <label>Data: <input type="date" id="ap-man-data"></label><br>
             <label><input type="checkbox" id="ap-man-folga"> É Folga?</label>
             <div class="grid-manual">
@@ -108,6 +111,66 @@
             </div>
             <button id="btnApSalvarManual" style="margin-top:10px;">Salvar Ajuste</button>
         </div>
+      </section>
+
+      <section id="view-relatorios" class="view-section" style="display:none;">
+          <div class="card" style="text-align:left; margin-bottom:20px;">
+              <label>Funcionário:</label>
+              <select id="rel-func-select" style="padding:8px; margin-right:10px;"></select>
+              <label>De:</label>
+              <input type="date" id="rel-data-ini" style="padding:8px;">
+              <label>Até:</label>
+              <input type="date" id="rel-data-fim" style="padding:8px;">
+              <button id="btnGerarRelatorio" class="btn-add" style="margin-left:10px;">Filtrar</button>
+          </div>
+          <table class="tabela-padrao">
+              <thead>
+                  <tr>
+                      <th>Data</th>
+                      <th>Entrada</th>
+                      <th>Int. Ini</th>
+                      <th>Int. Fim</th>
+                      <th>Saída</th>
+                      <th>Obs</th>
+                  </tr>
+              </thead>
+              <tbody id="lista-relatorios-corpo"></tbody>
+          </table>
+      </section>
+
+      <section id="view-caixa" class="view-section" style="display:none;">
+          <div class="cards-resumo" style="margin-bottom:20px;">
+              <div class="card">
+                  <h3>Saldo Atual</h3>
+                  <p id="caixa-saldo-topo" style="color:#27ae60;">R$ 0,00</p>
+              </div>
+          </div>
+          
+          <div class="card" style="text-align:left; margin-bottom:20px;">
+              <h4>Nova Movimentação</h4>
+              <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                  <input type="text" id="caixa-desc" placeholder="Descrição (ex: Café)" style="flex:2; padding:8px;">
+                  <input type="number" id="caixa-valor" placeholder="Valor (R$)" step="0.01" style="flex:1; padding:8px;">
+                  <select id="caixa-tipo" style="padding:8px;">
+                      <option value="saida">🔴 Saída (Gasto)</option>
+                      <option value="entrada">🟢 Entrada (Ganho)</option>
+                  </select>
+                  <button id="btnLancarCaixa" class="btn-add" style="margin:0;">Lançar</button>
+              </div>
+          </div>
+
+          <table class="tabela-padrao">
+              <thead>
+                  <tr>
+                      <th>Data</th>
+                      <th>Descrição</th>
+                      <th>Tipo</th>
+                      <th>Valor</th>
+                      <th>Ação</th>
+                  </tr>
+              </thead>
+              <tbody id="lista-caixa-corpo"></tbody>
+          </table>
       </section>
 
       <section id="view-funcionarios" class="view-section" style="display:none;">
@@ -138,13 +201,6 @@
             </thead>
             <tbody id="lista-usuarios-corpo"></tbody>
         </table>
-      </section>
-
-      <section id="view-relatorios" class="view-section" style="display:none;">
-          <h3>Relatórios em breve...</h3>
-      </section>
-      <section id="view-caixa" class="view-section" style="display:none;">
-          <h3>Caixa em breve...</h3>
       </section>
 
     </main>
