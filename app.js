@@ -12,8 +12,8 @@ const CONFIG = {
         FUNCIONARIOS: "funcionarios",
         FORNECEDORES: "fornecedores",
         PRODUTOS: "produtos",
-        FINANCEIRO: "financeiro", // Contas a pagar/receber
-        CAIXA: "caixa",           // Movimento diário
+        FINANCEIRO: "financeiro",
+        CAIXA: "caixa",
         NOTAS: "notas_entrada",
         APONTAMENTOS: "apontamentos"
     }
@@ -22,11 +22,20 @@ const CONFIG = {
 const STATE = { user: null, route: "dashboard" };
 
 /* =========================================
-   2. BANCO DE DADOS (LOCAL + ONLINE)
+   2. BANCO DE DADOS (CORRIGIDO: SINGLETON)
    ========================================= */
 const DB = {
+    _client: null, // Guarda a conexão para não criar várias
+
     isOnline() { return !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY && window.supabase); },
-    getClient() { return window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY); },
+    
+    getClient() { 
+        // Se já existe conexão, usa ela. Se não, cria uma nova.
+        if (!this._client) {
+            this._client = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+        }
+        return this._client;
+    },
     
     // --- LOCAL STORAGE CORE ---
     getDB() {
@@ -42,7 +51,7 @@ const DB = {
     saveDB(data) { localStorage.setItem("triboom_full_v1", JSON.stringify(data)); },
     genId() { return Math.random().toString(36).substr(2, 9); },
 
-    // --- CRUD GENÉRICO (Funciona para tudo) ---
+    // --- CRUD GENÉRICO ---
     async list(table) {
         if(this.isOnline()) {
             const {data} = await this.getClient().from(table).select("*");
@@ -63,7 +72,9 @@ const DB = {
             if(idx >= 0) db[table][idx] = item;
         } else {
             item.id = this.genId();
-            if(table==='caixa' || table==='financeiro') item.created_at = new Date().toISOString();
+            if(!item.created_at && (table==='caixa' || table==='financeiro')) {
+                item.created_at = new Date().toISOString();
+            }
             db[table].push(item);
         }
         this.saveDB(db);
@@ -79,7 +90,6 @@ const DB = {
     
     // --- LOGIN ---
     async login(login, senha) {
-        // Tenta local primeiro para admin padrão
         const db = this.getDB();
         const localUser = db.usuarios.find(u => u.login === login && u.senha === senha);
         if(localUser) return localUser;
@@ -99,17 +109,26 @@ const $ = (id) => document.getElementById(id);
 const show = (id) => { const el=$(id); if(el) el.style.display='block'; };
 const hideAll = () => document.querySelectorAll(".view-section").forEach(e => e.style.display='none');
 const moeda = (v) => parseFloat(v||0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
-const dataBR = (d) => new Date(d).toLocaleDateString('pt-BR');
+const dataBR = (d) => {
+    if(!d) return '--/--/----';
+    if(d.includes('T')) d = d.split('T')[0];
+    const parts = d.split('-'); 
+    return (parts.length === 3) ? parts.reverse().join('/') : d;
+};
 
 // --- NAVEGAÇÃO ---
 function navegar(rota) {
     STATE.route = rota;
-    $("titulo-secao").textContent = rota.toUpperCase();
+    const tit = $("titulo-secao");
+    if(tit) tit.textContent = rota.toUpperCase();
     hideAll();
     const view = $("view-"+rota);
     if(view) view.style.display = "block";
     
-    // Carrega dados da tela
+    document.querySelectorAll(".sidebar li").forEach(li => li.classList.remove("ativo"));
+    const activeLi = document.querySelector(`.sidebar li[data-target="${rota}"]`);
+    if(activeLi) activeLi.classList.add("ativo");
+
     if(rota === "dashboard") carregarDashboard();
     if(rota === "produtos") renderTable("produtos", ["codigo","nome","grupo","qtd","preco"]);
     if(rota === "financeiro") renderFinanceiro();
@@ -125,28 +144,29 @@ function navegar(rota) {
 async function renderTable(tabela, colunas) {
     const lista = await DB.list(CONFIG.TABLES[tabela.toUpperCase()] || tabela);
     const tbody = $("lista-"+tabela);
-    if(!tbody) return; // Algumas tabelas tem IDs diferentes, tratamos abaixo
+    if(!tbody) return;
     tbody.innerHTML = "";
     
     lista.forEach(item => {
         let tds = colunas.map(k => `<td>${item[k]||'-'}</td>`).join("");
-        tbody.innerHTML += `<tr>${tds}<td><button onclick="excluirItem('${tabela}','${item.id}')" style="background:red; color:white; border:none; padding:5px;">X</button></td></tr>`;
+        tbody.innerHTML += `<tr>${tds}<td><button onclick="excluirItem('${tabela}','${item.id}')" style="background:#e74c3c; color:white; border:none; padding:5px; border-radius:4px; cursor:pointer;">X</button></td></tr>`;
     });
 }
 
 async function renderFinanceiro() {
     const lista = await DB.list(CONFIG.TABLES.FINANCEIRO);
     const tbody = $("lista-financeiro");
+    if(!tbody) return;
     tbody.innerHTML = "";
     lista.forEach(f => {
-        const cor = f.tipo === 'receita' ? 'green' : 'red';
+        const cor = f.tipo === 'receita' ? '#27ae60' : '#c0392b';
         tbody.innerHTML += `
             <tr>
                 <td>${dataBR(f.data)}</td>
                 <td>${f.descricao}</td>
-                <td style="color:${cor}">${f.tipo.toUpperCase()}</td>
+                <td style="color:${cor}; font-weight:bold;">${f.tipo.toUpperCase()}</td>
                 <td>${moeda(f.valor)}</td>
-                <td><button onclick="excluirItem('financeiro','${f.id}')">X</button></td>
+                <td><button onclick="excluirItem('financeiro','${f.id}')" style="background:#e74c3c; color:white; border:none; padding:5px; border-radius:4px; cursor:pointer;">X</button></td>
             </tr>`;
     });
 }
@@ -154,29 +174,47 @@ async function renderFinanceiro() {
 async function renderCaixa() {
     const lista = await DB.list(CONFIG.TABLES.CAIXA);
     const tbody = $("lista-caixa");
+    if(!tbody) return;
     tbody.innerHTML = "";
     let saldo = 0;
+    
+    lista.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
     lista.forEach(c => {
         const val = parseFloat(c.valor);
         if(c.tipo==='entrada') saldo+=val; else saldo-=val;
-        tbody.innerHTML += `<tr><td>${new Date(c.created_at).toLocaleTimeString()}</td><td>${c.descricao}</td><td>${moeda(val)}</td><td>${c.tipo}</td></tr>`;
+        const cor = c.tipo==='entrada' ? 'green' : 'red';
+        
+        tbody.innerHTML += `
+            <tr>
+                <td>${new Date(c.created_at).toLocaleTimeString()}</td>
+                <td>${c.descricao}</td>
+                <td>${moeda(val)}</td>
+                <td style="color:${cor}; font-weight:bold;">${c.tipo.toUpperCase()}</td>
+            </tr>`;
     });
-    $("caixa-valor-topo").textContent = moeda(saldo);
-    $("dash-caixa-saldo").textContent = moeda(saldo);
+    
+    if($("caixa-valor-topo")) $("caixa-valor-topo").textContent = moeda(saldo);
+    if($("dash-caixa-saldo")) {
+        $("dash-caixa-saldo").textContent = moeda(saldo);
+        $("dash-caixa-saldo").style.color = saldo >= 0 ? "green" : "red";
+    }
 }
 
 async function carregarDashboard() {
     const prods = await DB.list(CONFIG.TABLES.PRODUTOS);
     const funcs = await DB.list(CONFIG.TABLES.FUNCIONARIOS);
-    $("dash-estoque-qtd").textContent = prods.length;
-    $("dash-total-funcs").textContent = funcs.length;
-    renderCaixa(); // Atualiza saldo
+    if($("dash-estoque-qtd")) $("dash-estoque-qtd").textContent = prods.length;
+    if($("dash-total-funcs")) $("dash-total-funcs").textContent = funcs.length;
+    renderCaixa();
 }
 
 // --- PONTO ---
 async function carregarPonto() {
     const funcs = await DB.list(CONFIG.TABLES.FUNCIONARIOS);
     const sel = $("apontamento-funcionario");
+    if(!sel) return;
+    
     sel.innerHTML = "";
     funcs.forEach(f => sel.innerHTML += `<option value="${f.id}">${f.nome}</option>`);
     
@@ -187,23 +225,24 @@ async function carregarPonto() {
 async function carregarStatusPonto() {
     const fid = $("apontamento-funcionario").value;
     if(!fid) return;
-    const data = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-'); // YYYY-MM-DD
-    $("apontamento-data").textContent = dataBR(data);
+    const data = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-'); 
     
-    ["entrada","int-ini","int-fim","saida"].forEach(k => $("hora-"+k).textContent = "-");
+    if($("apontamento-data")) $("apontamento-data").textContent = dataBR(data);
     
-    // Busca apontamento (simplificado)
+    ["entrada","int-ini","int-fim","saida"].forEach(k => {
+        if($("hora-"+k)) $("hora-"+k).textContent = "-";
+    });
+    
     const lista = await DB.list(CONFIG.TABLES.APONTAMENTOS);
     const ap = lista.find(a => a.funcionario_id === fid && a.data === data);
     
+    if($("apontamento-status")) $("apontamento-status").textContent = ap ? "Registro encontrado" : "Nenhum registro hoje";
+    
     if(ap) {
-        $("apontamento-status").textContent = "Registro encontrado";
         if(ap.entrada) $("hora-entrada").textContent = ap.entrada;
         if(ap.int_ini) $("hora-int-ini").textContent = ap.int_ini;
         if(ap.int_fim) $("hora-int-fim").textContent = ap.int_fim;
         if(ap.saida) $("hora-saida").textContent = ap.saida;
-    } else {
-        $("apontamento-status").textContent = "Nenhum registro hoje";
     }
 }
 
@@ -213,17 +252,20 @@ async function baterPonto(campo) {
     const data = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
     const hora = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
     
-    // Lógica simples: busca, atualiza ou cria
     const lista = await DB.list(CONFIG.TABLES.APONTAMENTOS);
     let ap = lista.find(a => a.funcionario_id === fid && a.data === data);
     
     if(ap && ap[campo]) return alert("Já marcado!");
     
     if(!ap) { ap = {funcionario_id: fid, data: data}; }
-    ap[campo] = hora; // ex: ap.entrada = "08:00"
     
-    // Mapeamento nomes campos
-    const map = { "btnApEntrada":"entrada", "btnApIntIni":"int_ini", "btnApIntFim":"int_fim", "btnApSaida":"saida" };
+    let campoDB = "";
+    if(campo === "entrada") campoDB = "entrada";
+    if(campo === "int_ini") campoDB = "int_ini";
+    if(campo === "int_fim") campoDB = "int_fim";
+    if(campo === "saida") campoDB = "saida";
+
+    ap[campoDB] = hora; 
     
     await DB.save(CONFIG.TABLES.APONTAMENTOS, ap);
     carregarStatusPonto();
@@ -240,9 +282,8 @@ function abrirModal(tipo) {
     modal.style.display = "block";
     content.innerHTML = "";
     
-    // Construtor de formulário
     const addInput = (id, label, type="text") => {
-        content.innerHTML += `<label>${label}</label><input id="mod-${id}" type="${type}" style="width:100%; padding:8px; margin-bottom:10px;">`;
+        content.innerHTML += `<label style="display:block; margin-top:10px;">${label}</label><input id="mod-${id}" type="${type}" style="width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:4px;">`;
     };
 
     if(tipo === "produto") {
@@ -275,7 +316,6 @@ function abrirModal(tipo) {
             modal.style.display="none"; navegar("financeiro");
         };
     }
-    // Adicione outros tipos (nota, funcionario) seguindo o padrão...
     else if(tipo === "funcionario") {
         titulo.textContent = "Novo Funcionário";
         addInput("nome","Nome"); addInput("cpf","CPF"); addInput("funcao","Função");
@@ -284,57 +324,85 @@ function abrirModal(tipo) {
             modal.style.display="none"; navegar("funcionarios");
         };
     }
+    else if(tipo === "nota") {
+        titulo.textContent = "Nova Nota";
+        addInput("numero","Número NF"); addInput("fornecedor","Fornecedor"); addInput("valor","Valor Total","number"); addInput("data","Data Emissão","date");
+        btn.onclick = async () => {
+            await DB.save(CONFIG.TABLES.NOTAS, { 
+                numero: $("mod-numero").value, fornecedor: $("mod-fornecedor").value, 
+                valor: Number($("mod-valor").value), data: $("mod-data").value 
+            });
+            modal.style.display="none"; navegar("notas");
+        };
+    }
 }
 
-// --- EVENTOS GLOBAIS ---
+// --- EVENTOS GLOBAIS (LOAD) ---
 window.addEventListener("load", () => {
-    // Login
-    $("btnLogin").onclick = async () => {
-        try {
-            const u = await DB.login($("usuario").value, $("senha").value);
-            STATE.user = u;
-            $("tela-login").style.display="none"; $("tela-dashboard").style.display="flex";
-            $("display-nome-usuario").textContent = u.nome;
-            navegar("dashboard");
-        } catch(e) { $("msg-erro").textContent = e.message; }
-    };
-    $(".btn-sair").onclick = () => window.location.reload();
+    // 1. Botão de Login
+    if($("btnLogin")) {
+        $("btnLogin").onclick = async () => {
+            try {
+                const u = await DB.login($("usuario").value, $("senha").value);
+                STATE.user = u;
+                $("tela-login").style.display="none"; $("tela-dashboard").style.display="flex";
+                $("display-nome-usuario").textContent = u.nome;
+                navegar("dashboard");
+            } catch(e) { $("msg-erro").textContent = e.message; }
+        };
+    }
+
+    // 2. Botão Sair
+    const btnSair = document.querySelector(".btn-sair");
+    if(btnSair) btnSair.onclick = () => window.location.reload();
     
-    // Menu
+    // 3. Menu Lateral
     document.querySelectorAll(".sidebar li").forEach(li => li.onclick = () => navegar(li.dataset.target));
     
-    // Botões de Ação
-    $("btnNovoProduto").onclick = () => abrirModal("produto");
-    $("btnNovoFornecedor").onclick = () => abrirModal("fornecedor");
-    $("btnNovaDespesa").onclick = () => abrirModal("despesa");
-    $("btnNovaReceita").onclick = () => abrirModal("receita");
-    $("btnNovoFuncionario").onclick = () => abrirModal("funcionario");
-    $("btnNovoUsuario").onclick = () => alert("Use a tela de usuários antiga ou crie lógica similar no app.js"); 
+    // 4. Botões de Ação
+    if($("btnNovoProduto")) $("btnNovoProduto").onclick = () => abrirModal("produto");
+    if($("btnNovoFornecedor")) $("btnNovoFornecedor").onclick = () => abrirModal("fornecedor");
+    if($("btnNovaDespesa")) $("btnNovaDespesa").onclick = () => abrirModal("despesa");
+    if($("btnNovaReceita")) $("btnNovaReceita").onclick = () => abrirModal("receita");
+    if($("btnNovoFuncionario")) $("btnNovoFuncionario").onclick = () => abrirModal("funcionario");
+    if($("btnNovoUsuario")) $("btnNovoUsuario").onclick = () => alert("Use o banco de dados para criar novos usuários de sistema."); 
+    if($("btnNovoNota")) $("btnNovoNota").onclick = () => abrirModal("nota");
 
-    // Ponto
-    $("btnApEntrada").onclick = () => baterPonto("entrada");
-    $("btnApIntIni").onclick = () => baterPonto("int_ini");
-    $("btnApIntFim").onclick = () => baterPonto("int_fim");
-    $("btnApSaida").onclick = () => baterPonto("saida");
+    // 5. Ponto
+    if($("btnApEntrada")) $("btnApEntrada").onclick = () => baterPonto("entrada");
+    if($("btnApIntIni")) $("btnApIntIni").onclick = () => baterPonto("int_ini");
+    if($("btnApIntFim")) $("btnApIntFim").onclick = () => baterPonto("int_fim");
+    if($("btnApSaida")) $("btnApSaida").onclick = () => baterPonto("saida");
     
-    // Caixa Rápido
-    $("btnLancarCaixa").onclick = async () => {
-        const desc = $("caixa-desc").value;
-        const val = $("caixa-valor").value;
-        if(!desc || !val) return alert("Preencha tudo");
-        await DB.save(CONFIG.TABLES.CAIXA, { descricao: desc, valor: Number(val), tipo: $("caixa-tipo").value });
-        $("caixa-desc").value=""; $("caixa-valor").value=""; renderCaixa();
-    };
+    // 6. Caixa Rápido
+    if($("btnLancarCaixa")) {
+        $("btnLancarCaixa").onclick = async () => {
+            const desc = $("caixa-desc").value;
+            const val = $("caixa-valor").value;
+            if(!desc || !val) return alert("Preencha descrição e valor");
+            await DB.save(CONFIG.TABLES.CAIXA, { descricao: desc, valor: Number(val), tipo: $("caixa-tipo").value });
+            $("caixa-desc").value=""; $("caixa-valor").value=""; renderCaixa();
+        };
+    }
 
-    // Fechar Modal
-    $(".close-modal").onclick = () => $("modal-generico").style.display="none";
+    // 7. Fechar Modal
+    document.querySelectorAll(".close-modal").forEach(el => {
+        el.onclick = () => $("modal-generico").style.display="none";
+    });
+
+    // 8. Mobile Menu
+    if($("btn-menu-mobile")) {
+        $("btn-menu-mobile").onclick = () => {
+            const sb = document.querySelector(".sidebar");
+            sb.style.left = sb.style.left === "0px" ? "-250px" : "0px";
+        };
+    }
 });
 
 // Helper Global para Excluir
 window.excluirItem = async (tabela, id) => {
-    if(confirm("Excluir item?")) {
+    if(confirm("Deseja realmente excluir este item?")) {
         await DB.delete(CONFIG.TABLES[tabela.toUpperCase()] || tabela, id);
-        // Recarrega a tela atual
         navegar(STATE.route); 
     }
 };
