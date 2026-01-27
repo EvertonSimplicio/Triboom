@@ -1,191 +1,409 @@
-:root { --primary-color: #4a90e2; --sidebar-bg: #2c3e50; --bg-light: #f4f6f9; }
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
-body { background-color: var(--bg-light); height: 100vh; overflow: hidden; }
+/* =========================================
+   1. RESET E BASE
+   ========================================= */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
 
-/* Login */
-.login-container { height: 100vh; display: flex; justify-content: center; align-items: center; background: linear-gradient(135deg, #4a90e2, #9013fe); }
-.login-box { background: white; padding: 40px; border-radius: 10px; width: 100%; max-width: 350px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
-.input-group { position: relative; margin-bottom: 20px; }
-.input-group span { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #999; }
-.input-group input { width: 100%; padding: 12px 10px 12px 40px; border: 1px solid #ddd; border-radius: 5px; outline: none; }
-button { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer; transition: 0.3s; }
-button:hover { filter: brightness(90%); }
-.error-msg { color: red; font-size: 12px; margin-top: 10px; }
+body {
+    background-color: #f0f2f5;
+    color: #333;
+    height: 100vh;
+    overflow: hidden; /* Evita rolagem dupla com a sidebar */
+}
 
-/* Dashboard */
-.dashboard-container { display: flex; height: 100vh; }
-.sidebar { width: 250px; background-color: var(--sidebar-bg); color: #ecf0f1; display: flex; flex-direction: column; overflow: hidden; }
+/* =========================================
+   2. TELA DE LOGIN
+   ========================================= */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: linear-gradient(135deg, #2c3e50, #4ca1af);
+}
 
-/* Permite rolagem do menu quando houver muitos itens (ex.: Configurações) */
-.sidebar nav { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.sidebar nav ul { padding-bottom: 18px; }
-.logo-area { padding: 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
-.sidebar nav ul { list-style: none; margin-top: 20px; }
-.sidebar nav ul li { padding: 15px 25px; cursor: pointer; display: flex; align-items: center; transition: 0.2s; }
-.sidebar nav ul li span { margin-right: 15px; }
-.sidebar nav ul li:hover, .sidebar nav ul li.ativo { background-color: rgba(255,255,255,0.1); border-left: 4px solid var(--primary-color); }
-.logout-area { padding: 20px; cursor: pointer; margin-top: auto; background: rgba(0,0,0,0.2); display: flex; align-items: center; }
-.logout-area span { margin-right: 10px; }
-.main-content { flex: 1; display: flex; flex-direction: column; }
-header { background: white; padding: 15px 30px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
-.content-box { padding: 30px; flex: 1; overflow-y: auto; }
+.login-box {
+    background: white;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
 
-/* Toolbar */
-.toolbar { margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-.filters { display: flex; gap: 10px; flex: 1; max-width: 500px; }
-.filters input, .filters select { padding: 10px; border: 1px solid #ddd; border-radius: 5px; outline: none; background: white; }
-.filters input { flex: 2; } .filters select { flex: 1; }
-.summary-stats { display: flex; align-items: center; background-color: white; padding: 8px 20px; border-radius: 5px; border: 1px solid #ddd; gap: 15px; font-size: 14px; color: #555; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-.stat-item { display: flex; gap: 5px; align-items: center; }
-.stat-divider { width: 1px; height: 15px; background-color: #ddd; }
+.logo-login {
+    max-width: 150px;
+    margin-bottom: 20px;
+}
 
-.btn-action { width: auto; padding: 10px 20px; display: flex; align-items: center; gap: 5px; background: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer; }
-.btn-red { background-color: #e74c3c; } 
-.btn-yellow { background-color: #f1c40f; color: #333; } 
+.input-group {
+    margin-bottom: 15px;
+    text-align: left;
+}
 
-/* Tables */
-.table-container { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); overflow: hidden; }
-.styled-table { width: 100%; border-collapse: collapse; }
-.styled-table thead tr { background-color: var(--primary-color); color: white; text-align: left; }
-.styled-table th, .styled-table td { padding: 12px 15px; }
-.styled-table tbody tr { border-bottom: 1px solid #dddddd; }
-.styled-table tbody tr:hover { background-color: #f1f1f1; }
-.card-config { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); max-width: 600px; }
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+}
 
-/* Modals */
-.modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
-.modal-content { background-color: #fefefe; margin: 5% auto; padding: 25px; border-radius: 8px; width: 450px; position: relative; animation: slideDown 0.3s; }
-.close { float: right; font-size: 28px; cursor: pointer; color: #aaa; }
-.close:hover { color: #000; }
+.input-group input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+}
 
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 14px; }
-.form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; outline: none; }
-.btn-save { background-color: var(--primary-color); margin-top: 10px; width: 100%; }
-.row { display: flex; gap: 15px; }
-.half { flex: 1; }
+#btnLogin {
+    width: 100%;
+    padding: 12px;
+    background-color: #2c3e50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+    margin-top: 10px;
+}
 
-/* ESTILOS NOVOS PARA FINANCEIRO */
-.type-toggle { display: flex; gap: 10px; margin-bottom: 20px; }
-.type-option { flex: 1; padding: 12px; text-align: center; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; font-weight: 500; transition: 0.2s; }
-.type-option.receita.selected { background-color: #e8f5e9; border-color: #27ae60; color: #27ae60; font-weight: 600; }
-.type-option.despesa.selected { background-color: #ffebee; border-color: #e74c3c; color: #e74c3c; font-weight: 600; }
-.value-display { font-size: 24px; text-align: center; border: none; border-bottom: 2px solid #ddd; width: 100%; padding: 10px 10px 10px 30px; outline: none; margin-bottom: 10px; color: #333; font-weight: 600; }
-.value-display:focus { border-color: var(--primary-color); }
+#btnLogin:hover {
+    background-color: #34495e;
+}
 
-/* Estilo da Lista de Parcelas Dinâmica */
-.item-parcela { display:flex; gap:10px; margin-bottom:8px; align-items:center; }
-.item-parcela span { font-size:12px; width:20px; color:#666; font-weight:bold; }
-.item-parcela input { font-size:13px; padding:5px; height:35px; }
+.erro {
+    color: #e74c3c;
+    margin-top: 15px;
+    font-size: 14px;
+}
 
-.lista-contagem-container { max-height: 250px; overflow-y: auto; border: 1px solid #eee; margin-bottom: 10px; background:white; }
-.search-results { position: absolute; top: 100%; left: 0; width: 100%; background: white; border: 1px solid #ddd; border-radius: 0 0 5px 5px; max-height: 150px; overflow-y: auto; z-index: 10; list-style: none; display: none; box-shadow: 0 5px 10px rgba(0,0,0,0.1); }
-.search-results li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; }
-.search-results li:hover { background-color: #f1f1f1; }
-.search-results li strong { color: var(--primary-color); }
-.diff-positive { color: #27ae60; font-weight: bold; }
-.diff-negative { color: #e74c3c; font-weight: bold; }
-.diff-neutral { color: #999; }
+/* =========================================
+   3. LAYOUT DASHBOARD (SIDEBAR + CONTENT)
+   ========================================= */
+#tela-dashboard {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
 
-@keyframes slideDown { from {top: -50px; opacity: 0;} to {top: 5%; opacity: 1;} }
-.anime-left { animation: animeLeft 0.5s forwards; }
-@keyframes animeLeft { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+/* Sidebar (Menu Lateral) */
+.sidebar {
+    width: 250px;
+    background-color: #2c3e50;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    transition: width 0.3s;
+}
 
-/* Clique no nome do usuário (topbar) para abrir troca de senha */
-.user-greeting{cursor:pointer; user-select:none;}
-.user-greeting:hover{text-decoration:underline;}
+.sidebar-header {
+    padding: 20px;
+    text-align: center;
+    border-bottom: 1px solid #34495e;
+}
 
+.logo-sidebar {
+    max-width: 80px;
+    border-radius: 50%;
+    margin-bottom: 10px;
+}
 
-/* Nome do usuário clicável para trocar senha */
-#btn-perfil-usuario{cursor:pointer; position:relative; z-index:5;}
-#btn-perfil-usuario:hover b{ text-decoration: underline; }
+.sidebar nav ul {
+    list-style: none;
+    padding-top: 20px;
+}
 
+.sidebar nav ul li {
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 15px;
+}
 
-/* =============================
-   Impressão (Relatórios)
-   ============================= */
-@media print {
-  /*
-    Objetivo: ao imprimir, mostrar apenas o conteúdo do relatório (tabelas)
-    e esconder filtros, botões, cards, menu lateral e cabeçalhos.
+.sidebar nav ul li:hover {
+    background-color: #34495e;
+}
 
-    - print-mode-relatorios: quando o usuário clica no botão "Imprimir" do sistema
-    - fallback: #view-relatorios.active, caso o usuário use o menu do navegador
-  */
+.sidebar nav ul li.ativo {
+    background-color: #1abc9c;
+    font-weight: bold;
+}
 
-  /* Remove layout/menus (também serve como fallback se o usuário imprimir pelo menu do navegador) */
-  nav.sidebar,
-  .sidebar,
-  .sidebar-backdrop,
-  .topbar,
-  header,
-  .mobile-topbar,
-  .btn-logout,
-  body.print-mode-relatorios nav.sidebar,
-  body.print-mode-relatorios .sidebar,
-  body.print-mode-relatorios .sidebar-backdrop,
-  body.print-mode-relatorios .topbar,
-  body.print-mode-relatorios header,
-  body.print-mode-relatorios .mobile-topbar,
-  body.print-mode-relatorios .btn-logout {
-    display: none !important;
-  }
+.sidebar-footer {
+    margin-top: auto;
+    padding: 20px;
+    background-color: #1a252f;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-  /* Esconde controles e cards do Relatórios */
-  body.print-mode-relatorios #view-relatorios .toolbar,
-  body.print-mode-relatorios #view-relatorios .rel-top,
-  body.print-mode-relatorios #view-relatorios .rel-toolbar,
-  body.print-mode-relatorios #view-relatorios .btn,
-  body.print-mode-relatorios #view-relatorios button,
-  body.print-mode-relatorios #view-relatorios #relatorios-cards,
-  body.print-mode-relatorios #view-relatorios #rel-cards-fin,
-  body.print-mode-relatorios #view-relatorios #rel-cards-estoque,
-  body.print-mode-relatorios #view-relatorios #rel-cards-notas,
-  body.print-mode-relatorios #view-relatorios .card,
-  body.print-mode-relatorios #view-relatorios .cards,
-  body.print-mode-relatorios #view-relatorios .kpi,
-  body.print-mode-relatorios #view-relatorios .kpi-card,
-  body.print-mode-relatorios #view-relatorios .rel-cards,
-  body.print-mode-relatorios #view-relatorios #rel-sec-resumo,
-  body.print-mode-relatorios #view-relatorios .no-print,
-  /* Fallback quando a página alterna telas via JS e não usa .active */
-  #view-relatorios .toolbar,
-  #view-relatorios .rel-top,
-  #view-relatorios .rel-toolbar,
-  #view-relatorios .no-print,
-  #view-relatorios #relatorios-cards,
-  #view-relatorios #rel-cards-fin,
-  #view-relatorios #rel-cards-estoque,
-  #view-relatorios #rel-cards-notas,
-  #view-relatorios #rel-sec-resumo,
-  #view-relatorios.active .toolbar,
-  #view-relatorios.active #relatorios-cards,
-  #view-relatorios.active #rel-cards-fin,
-  #view-relatorios.active #rel-cards-estoque,
-  #view-relatorios.active #rel-cards-notas {
-    display: none !important;
-  }
+.btn-sair {
+    background: none;
+    border: 1px solid #e74c3c;
+    color: #e74c3c;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
 
-  /* Ajustes gerais para impressão */
-  body {
-    background: #fff !important;
-  }
+.btn-sair:hover {
+    background: #e74c3c;
+    color: white;
+}
 
-  .dashboard-container,
-  .content-box {
-    overflow: visible !important;
-    height: auto !important;
-  }
+/* Área de Conteúdo */
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
 
-  body.print-mode-relatorios #view-relatorios,
-  #view-relatorios.active {
-    padding: 0 !important;
-    margin: 0 !important;
-  }
+.topbar {
+    background: white;
+    padding: 15px 30px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
 
-  body.print-mode-relatorios #view-relatorios table,
-  #view-relatorios.active table {
-    width: 100% !important;
-    font-size: 12px !important;
-  }
+#btn-menu-mobile {
+    display: none; /* Escondido no PC */
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.view-section {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+}
+
+/* =========================================
+   4. COMPONENTES ESPECÍFICOS
+   ========================================= */
+
+/* Cards do Dashboard */
+.cards-resumo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.card h3 { color: #7f8c8d; font-size: 14px; text-transform: uppercase; }
+.card p { font-size: 32px; font-weight: bold; color: #2c3e50; margin-top: 10px; }
+
+/* Tela de Apontamento */
+.apontamento-card {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.sel-funcionario-box {
+    margin-bottom: 20px;
+    text-align: left;
+}
+.sel-funcionario-box select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.data-display {
+    margin-bottom: 30px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 20px;
+}
+.data-display h3 { font-size: 28px; color: #2c3e50; }
+.data-display p { color: #7f8c8d; }
+
+.botoes-ponto {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.btn-ponto {
+    padding: 20px;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.1s;
+    font-size: 14px;
+}
+
+.btn-ponto:active { transform: scale(0.98); }
+.btn-ponto span { display: block; margin-top: 5px; font-size: 18px; opacity: 0.9; }
+
+.entrada { background-color: #27ae60; }   /* Verde */
+.saida { background-color: #c0392b; }     /* Vermelho */
+.intervalo { background-color: #f39c12; } /* Laranja */
+
+.obs-box input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+/* Tabelas (Funcionários/Usuários) */
+.btn-add {
+    background-color: #2c3e50;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    cursor: pointer;
+}
+
+.tabela-padrao {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.tabela-padrao th, .tabela-padrao td {
+    padding: 15px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.tabela-padrao th {
+    background-color: #f8f9fa;
+    color: #2c3e50;
+    font-weight: bold;
+}
+
+.btn-excluir {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+/* =========================================
+   5. MODAIS
+   ========================================= */
+.modal {
+    display: none; /* Escondido por padrão */
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 10% auto;
+    padding: 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.close-modal {
+    position: absolute;
+    right: 20px;
+    top: 15px;
+    font-size: 28px;
+    cursor: pointer;
+    color: #aaa;
+}
+
+.modal-content label {
+    display: block;
+    margin-top: 15px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.modal-content input, .modal-content select {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.btn-save {
+    width: 100%;
+    margin-top: 25px;
+    padding: 12px;
+    background-color: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+/* =========================================
+   6. RESPONSIVO (MOBILE)
+   ========================================= */
+@media (max-width: 768px) {
+    #tela-dashboard { flex-direction: column; }
+    
+    .sidebar {
+        position: fixed;
+        height: 100%;
+        left: -250px;
+        z-index: 999;
+    }
+    
+    .sidebar.ativo { left: 0; }
+    
+    .sidebar-overlay {
+        /* Se quisermos overlay no futuro */
+    }
+
+    .content { width: 100%; }
+    
+    #btn-menu-mobile { display: block; }
+    
+    .botoes-ponto { grid-template-columns: 1fr; }
+    
+    .tabela-padrao { display: block; overflow-x: auto; }
 }
