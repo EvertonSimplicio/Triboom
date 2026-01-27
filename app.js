@@ -1,9 +1,13 @@
 /* =========================================
    CONFIGURAÇÃO
    ========================================= */
+// Tenta pegar do secrets.js (ENV), se não achar, fica vazio
+const API_URL = (typeof ENV !== 'undefined') ? ENV.SUPABASE_URL : "";
+const API_KEY = (typeof ENV !== 'undefined') ? ENV.SUPABASE_KEY : "";
+
 const CONFIG = {
-    SUPABASE_URL: "",  // Opcional: Para usar online
-    SUPABASE_KEY: "",  // Opcional
+    SUPABASE_URL: API_URL,
+    SUPABASE_KEY: API_KEY,
     TABLES: {
         USUARIOS: "usuarios",
         FUNCIONARIOS: "funcionarios",
@@ -11,6 +15,8 @@ const CONFIG = {
         CAIXA: "caixa"
     }
 };
+
+// ... resto do código ...
 
 const STATE = {
     user: null,
