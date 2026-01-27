@@ -1,7 +1,6 @@
 /* =========================================
-   CONFIGURAÇÃO
+   1. CONFIGURAÇÃO E DADOS
    ========================================= */
-// Tenta pegar do secrets.js (ENV), se não achar, fica vazio
 const API_URL = (typeof ENV !== 'undefined') ? ENV.SUPABASE_URL : "";
 const API_KEY = (typeof ENV !== 'undefined') ? ENV.SUPABASE_KEY : "";
 
@@ -11,547 +10,331 @@ const CONFIG = {
     TABLES: {
         USUARIOS: "usuarios",
         FUNCIONARIOS: "funcionarios",
-        APONTAMENTOS: "apontamentos",
-        CAIXA: "caixa"
+        FORNECEDORES: "fornecedores",
+        PRODUTOS: "produtos",
+        FINANCEIRO: "financeiro", // Contas a pagar/receber
+        CAIXA: "caixa",           // Movimento diário
+        NOTAS: "notas_entrada",
+        APONTAMENTOS: "apontamentos"
     }
 };
 
-// ... resto do código ...
-
-const STATE = {
-    user: null,
-    funcionarios: [],
-    route: "dashboard"
-};
+const STATE = { user: null, route: "dashboard" };
 
 /* =========================================
-   BANCO DE DADOS (DB)
+   2. BANCO DE DADOS (LOCAL + ONLINE)
    ========================================= */
 const DB = {
-    isOnline() {
-        return !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY && window.supabase);
-    },
-    getClient() {
-        return window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
-    },
-    // --- LOCAL STORAGE ---
-    getStorage() {
-        const s = localStorage.getItem("triboom_db_v2");
-        if (s) return JSON.parse(s);
-        const inicial = {
-            usuarios: [{id:"1", nome:"Admin", login:"admin", senha:"admin", perfil:"Admin", ativo:true}],
-            funcionarios: [],
-            apontamentos: [],
-            caixa: []
+    isOnline() { return !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_KEY && window.supabase); },
+    getClient() { return window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY); },
+    
+    // --- LOCAL STORAGE CORE ---
+    getDB() {
+        const s = localStorage.getItem("triboom_full_v1");
+        if(s) return JSON.parse(s);
+        const init = { 
+            usuarios:[{id:"1", nome:"Admin", login:"admin", senha:"admin", perfil:"Admin", ativo:true}], 
+            funcionarios:[], fornecedores:[], produtos:[], financeiro:[], caixa:[], notas:[], apontamentos:[] 
         };
-        localStorage.setItem("triboom_db_v2", JSON.stringify(inicial));
-        return inicial;
+        localStorage.setItem("triboom_full_v1", JSON.stringify(init));
+        return init;
     },
-    setStorage(data) {
-        localStorage.setItem("triboom_db_v2", JSON.stringify(data));
-    },
-    gerarId() {
-        return Math.random().toString(36).substr(2, 9);
-    },
+    saveDB(data) { localStorage.setItem("triboom_full_v1", JSON.stringify(data)); },
+    genId() { return Math.random().toString(36).substr(2, 9); },
 
-    // --- MÉTODOS GERAIS ---
+    // --- CRUD GENÉRICO (Funciona para tudo) ---
+    async list(table) {
+        if(this.isOnline()) {
+            const {data} = await this.getClient().from(table).select("*");
+            return data || [];
+        }
+        return this.getDB()[table] || [];
+    },
+    async save(table, item) {
+        if(this.isOnline()) {
+            const pl = {...item}; if(!pl.id) delete pl.id;
+            const {error} = await this.getClient().from(table).upsert(pl);
+            if(error) throw error; return;
+        }
+        const db = this.getDB();
+        db[table] = db[table] || [];
+        if(item.id) {
+            const idx = db[table].findIndex(x => x.id === item.id);
+            if(idx >= 0) db[table][idx] = item;
+        } else {
+            item.id = this.genId();
+            if(table==='caixa' || table==='financeiro') item.created_at = new Date().toISOString();
+            db[table].push(item);
+        }
+        this.saveDB(db);
+    },
+    async delete(table, id) {
+        if(this.isOnline()) {
+            await this.getClient().from(table).delete().eq("id", id); return;
+        }
+        const db = this.getDB();
+        db[table] = db[table].filter(x => x.id !== id);
+        this.saveDB(db);
+    },
+    
+    // --- LOGIN ---
     async login(login, senha) {
-        if (this.isOnline()) {
-            const { data, error } = await this.getClient().from(CONFIG.TABLES.USUARIOS).select("*").eq("login", login).maybeSingle();
-            if (error) throw error;
-            if (!data || !data.ativo) throw new Error("Usuário inválido.");
-            if (data.senha !== senha) throw new Error("Senha incorreta.");
-            return data;
-        }
-        // Local
-        await new Promise(r => setTimeout(r, 200));
-        const db = this.getStorage();
-        const user = db.usuarios.find(u => u.login === login && u.senha === senha && u.ativo);
-        if (!user) throw new Error("Usuário ou senha incorretos.");
-        return user;
-    },
+        // Tenta local primeiro para admin padrão
+        const db = this.getDB();
+        const localUser = db.usuarios.find(u => u.login === login && u.senha === senha);
+        if(localUser) return localUser;
 
-    // --- USUARIOS ---
-    async getUsuarios() {
-        if (this.isOnline()) {
-            const { data } = await this.getClient().from(CONFIG.TABLES.USUARIOS).select("*");
-            return data || [];
+        if(this.isOnline()) {
+            const {data} = await this.getClient().from("usuarios").select("*").eq("login",login).maybeSingle();
+            if(data && data.senha === senha) return data;
         }
-        return this.getStorage().usuarios;
-    },
-    async salvarUsuario(user) {
-        if (this.isOnline()) {
-            const sb = this.getClient();
-            const pl = {...user}; if(!pl.id) delete pl.id;
-            await sb.from(CONFIG.TABLES.USUARIOS).upsert(pl);
-            return;
-        }
-        const db = this.getStorage();
-        if(user.id) {
-            const idx = db.usuarios.findIndex(u=>u.id===user.id);
-            if(idx>=0) db.usuarios[idx]=user;
-        } else {
-            user.id = this.gerarId();
-            user.ativo = true;
-            db.usuarios.push(user);
-        }
-        this.setStorage(db);
-    },
-    async excluirUsuario(id) {
-        if (this.isOnline()) await this.getClient().from(CONFIG.TABLES.USUARIOS).delete().eq("id", id);
-        else {
-            const db = this.getStorage();
-            db.usuarios = db.usuarios.filter(u=>u.id!==id);
-            this.setStorage(db);
-        }
-    },
-
-    // --- FUNCIONARIOS ---
-    async getFuncionarios() {
-        if (this.isOnline()) {
-            const { data } = await this.getClient().from(CONFIG.TABLES.FUNCIONARIOS).select("*").order("nome");
-            return data || [];
-        }
-        return this.getStorage().funcionarios;
-    },
-    async salvarFuncionario(func) {
-        if (this.isOnline()) {
-            const pl = {...func}; if(!pl.id) delete pl.id;
-            await this.getClient().from(CONFIG.TABLES.FUNCIONARIOS).upsert(pl);
-            return;
-        }
-        const db = this.getStorage();
-        if(func.id) {
-            const idx = db.funcionarios.findIndex(f=>f.id===func.id);
-            if(idx>=0) db.funcionarios[idx]=func;
-        } else {
-            func.id = this.gerarId();
-            func.ativo = true;
-            db.funcionarios.push(func);
-        }
-        this.setStorage(db);
-    },
-    async excluirFuncionario(id) {
-        if (this.isOnline()) await this.getClient().from(CONFIG.TABLES.FUNCIONARIOS).delete().eq("id", id);
-        else {
-            const db = this.getStorage();
-            db.funcionarios = db.funcionarios.filter(f=>f.id!==id);
-            this.setStorage(db);
-        }
-    },
-
-    // --- APONTAMENTOS ---
-    async getApontamento(fid, data) {
-        if (this.isOnline()) {
-            const { data: res } = await this.getClient().from(CONFIG.TABLES.APONTAMENTOS).select("*").eq("funcionario_id", fid).eq("data", data).maybeSingle();
-            return res;
-        }
-        const db = this.getStorage();
-        return db.apontamentos.find(a => a.funcionario_id === fid && a.data === data);
-    },
-    async salvarApontamento(payload) {
-        if (this.isOnline()) {
-            const sb = this.getClient();
-            const {data: existe} = await sb.from(CONFIG.TABLES.APONTAMENTOS).select("id").eq("funcionario_id", payload.funcionario_id).eq("data", payload.data).maybeSingle();
-            const dados = {...payload};
-            if(existe) dados.id = existe.id;
-            await sb.from(CONFIG.TABLES.APONTAMENTOS).upsert(dados);
-            return;
-        }
-        const db = this.getStorage();
-        const idx = db.apontamentos.findIndex(a => a.funcionario_id === payload.funcionario_id && a.data === payload.data);
-        if(idx>=0) {
-            db.apontamentos[idx] = {...db.apontamentos[idx], ...payload};
-        } else {
-            db.apontamentos.push({id: this.gerarId(), ...payload});
-        }
-        this.setStorage(db);
-    },
-    async getRelatorio(fid, ini, fim) {
-        // Filtragem simples
-        if (this.isOnline()) {
-            let q = this.getClient().from(CONFIG.TABLES.APONTAMENTOS).select("*").gte("data", ini).lte("data", fim);
-            if(fid) q = q.eq("funcionario_id", fid);
-            const { data } = await q.order("data");
-            return data || [];
-        }
-        const db = this.getStorage();
-        return db.apontamentos.filter(a => {
-            if(fid && a.funcionario_id !== fid) return false;
-            return a.data >= ini && a.data <= fim;
-        }).sort((a,b) => a.data.localeCompare(b.data));
-    },
-
-    // --- CAIXA ---
-    async getCaixa() {
-        if (this.isOnline()) {
-            const { data } = await this.getClient().from(CONFIG.TABLES.CAIXA).select("*").order("created_at", {ascending: false});
-            return data || [];
-        }
-        const db = this.getStorage();
-        return (db.caixa || []).sort((a,b) => b.id.localeCompare(a.id)); // simulando ordem reversa
-    },
-    async lancarCaixa(item) {
-        if (this.isOnline()) {
-            await this.getClient().from(CONFIG.TABLES.CAIXA).insert([item]);
-            return;
-        }
-        const db = this.getStorage();
-        db.caixa = db.caixa || [];
-        item.id = this.gerarId();
-        item.data = new Date().toISOString();
-        db.caixa.push(item);
-        this.setStorage(db);
-    },
-    async excluirCaixa(id) {
-         if (this.isOnline()) await this.getClient().from(CONFIG.TABLES.CAIXA).delete().eq("id", id);
-         else {
-             const db = this.getStorage();
-             db.caixa = db.caixa.filter(c => c.id !== id);
-             this.setStorage(db);
-         }
+        throw new Error("Login inválido.");
     }
 };
 
 /* =========================================
-   INTERFACE (UI)
+   3. INTERFACE (VIEW)
    ========================================= */
 const $ = (id) => document.getElementById(id);
-const hide = (id) => { const el=$(id); if(el) el.style.display = 'none'; };
-const hojeISO = () => new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
-const agoraHora = () => new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
-const moeda = (v) => parseFloat(v).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+const show = (id) => { const el=$(id); if(el) el.style.display='block'; };
+const hideAll = () => document.querySelectorAll(".view-section").forEach(e => e.style.display='none');
+const moeda = (v) => parseFloat(v||0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+const dataBR = (d) => new Date(d).toLocaleDateString('pt-BR');
 
-function navegar(tela) {
-    STATE.route = tela;
-    const tit = $("titulo-secao");
-    if(tit) tit.textContent = tela.toUpperCase();
-
-    // Views
-    document.querySelectorAll(".view-section").forEach(d => d.style.display = "none");
-    const view = $("view-" + tela);
+// --- NAVEGAÇÃO ---
+function navegar(rota) {
+    STATE.route = rota;
+    $("titulo-secao").textContent = rota.toUpperCase();
+    hideAll();
+    const view = $("view-"+rota);
     if(view) view.style.display = "block";
-
-    // Menu
-    document.querySelectorAll(".sidebar li").forEach(li => li.classList.remove("ativo"));
-    const li = document.querySelector(`.sidebar li[data-target="${tela}"]`);
-    if(li) li.classList.add("ativo");
-
-    // Loads Específicos
-    if (tela === "funcionarios") carregarFuncionarios();
-    if (tela === "usuarios") carregarUsuarios();
-    if (tela === "apontamento") prepararApontamento();
-    if (tela === "dashboard") carregarDashboard();
-    if (tela === "relatorios") prepararRelatorios();
-    if (tela === "caixa") carregarCaixa();
+    
+    // Carrega dados da tela
+    if(rota === "dashboard") carregarDashboard();
+    if(rota === "produtos") renderTable("produtos", ["codigo","nome","grupo","qtd","preco"]);
+    if(rota === "financeiro") renderFinanceiro();
+    if(rota === "caixa") renderCaixa();
+    if(rota === "notas") renderTable("notas", ["numero","fornecedor","data","valor"]);
+    if(rota === "funcionarios") renderTable("funcionarios", ["nome","cpf","funcao"]);
+    if(rota === "fornecedores") renderTable("fornecedores", ["nome","contato","telefone"]);
+    if(rota === "usuarios") renderTable("usuarios", ["nome","login","perfil"]);
+    if(rota === "apontamento") carregarPonto();
 }
 
-// --- LOGICAS ESPECIFICAS ---
-
-// RELATÓRIOS
-async function prepararRelatorios() {
-    const lista = await DB.getFuncionarios();
-    const sel = $("rel-func-select");
-    sel.innerHTML = '<option value="">Todos</option>';
-    lista.forEach(f => {
-        sel.innerHTML += `<option value="${f.id}">${f.nome}</option>`;
-    });
-    // Datas padrão (Mês atual)
-    const hoje = new Date();
-    const dia1 = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    $("rel-data-ini").value = dia1.toISOString().split('T')[0];
-    $("rel-data-fim").value = hojeISO();
-    
-    // Auto carregar
-    carregarTabelaRelatorio();
-}
-
-async function carregarTabelaRelatorio() {
-    const fid = $("rel-func-select").value;
-    const ini = $("rel-data-ini").value;
-    const fim = $("rel-data-fim").value;
-    
-    const dados = await DB.getRelatorio(fid, ini, fim);
-    const tbody = $("lista-relatorios-corpo");
+// --- RENDERIZADORES ---
+async function renderTable(tabela, colunas) {
+    const lista = await DB.list(CONFIG.TABLES[tabela.toUpperCase()] || tabela);
+    const tbody = $("lista-"+tabela);
+    if(!tbody) return; // Algumas tabelas tem IDs diferentes, tratamos abaixo
     tbody.innerHTML = "";
     
-    if(dados.length === 0) {
-        tbody.innerHTML = "<tr><td colspan='6'>Nenhum registro encontrado.</td></tr>";
-        return;
-    }
+    lista.forEach(item => {
+        let tds = colunas.map(k => `<td>${item[k]||'-'}</td>`).join("");
+        tbody.innerHTML += `<tr>${tds}<td><button onclick="excluirItem('${tabela}','${item.id}')" style="background:red; color:white; border:none; padding:5px;">X</button></td></tr>`;
+    });
+}
 
-    dados.forEach(d => {
+async function renderFinanceiro() {
+    const lista = await DB.list(CONFIG.TABLES.FINANCEIRO);
+    const tbody = $("lista-financeiro");
+    tbody.innerHTML = "";
+    lista.forEach(f => {
+        const cor = f.tipo === 'receita' ? 'green' : 'red';
         tbody.innerHTML += `
             <tr>
-                <td>${d.data.split('-').reverse().join('/')}</td>
-                <td>${d.entrada || '-'}</td>
-                <td>${d.int_inicio || '-'}</td>
-                <td>${d.int_fim || '-'}</td>
-                <td>${d.saida || '-'}</td>
-                <td>${d.obs || ''}</td>
-            </tr>
-        `;
+                <td>${dataBR(f.data)}</td>
+                <td>${f.descricao}</td>
+                <td style="color:${cor}">${f.tipo.toUpperCase()}</td>
+                <td>${moeda(f.valor)}</td>
+                <td><button onclick="excluirItem('financeiro','${f.id}')">X</button></td>
+            </tr>`;
     });
 }
 
-// CAIXA
-async function carregarCaixa() {
-    const items = await DB.getCaixa();
-    const tbody = $("lista-caixa-corpo");
+async function renderCaixa() {
+    const lista = await DB.list(CONFIG.TABLES.CAIXA);
+    const tbody = $("lista-caixa");
     tbody.innerHTML = "";
-    
     let saldo = 0;
-    
-    items.forEach(c => {
+    lista.forEach(c => {
         const val = parseFloat(c.valor);
-        if(c.tipo === 'entrada') saldo += val;
-        else saldo -= val;
-        
-        const cor = c.tipo === 'entrada' ? 'green' : 'red';
-        const icone = c.tipo === 'entrada' ? '⬆' : '⬇';
-
-        tbody.innerHTML += `
-            <tr>
-                <td>${new Date(c.data || new Date()).toLocaleDateString('pt-BR')}</td>
-                <td>${c.descricao}</td>
-                <td style="color:${cor}">${icone} ${c.tipo.toUpperCase()}</td>
-                <td>${moeda(val)}</td>
-                <td><button class="btn-excluir" onclick="apagarCaixa('${c.id}')">X</button></td>
-            </tr>
-        `;
+        if(c.tipo==='entrada') saldo+=val; else saldo-=val;
+        tbody.innerHTML += `<tr><td>${new Date(c.created_at).toLocaleTimeString()}</td><td>${c.descricao}</td><td>${moeda(val)}</td><td>${c.tipo}</td></tr>`;
     });
-    
-    const elSaldo = $("caixa-saldo-topo");
-    elSaldo.textContent = moeda(saldo);
-    elSaldo.style.color = saldo >= 0 ? "#27ae60" : "#c0392b";
+    $("caixa-valor-topo").textContent = moeda(saldo);
+    $("dash-caixa-saldo").textContent = moeda(saldo);
 }
 
-async function lancarCaixa() {
-    const desc = $("caixa-desc").value;
-    const val = $("caixa-valor").value;
-    const tipo = $("caixa-tipo").value;
-
-    if(!desc || !val) return alert("Preencha descrição e valor!");
-
-    await DB.lancarCaixa({
-        descricao: desc,
-        valor: parseFloat(val),
-        tipo: tipo
-    });
-
-    $("caixa-desc").value = "";
-    $("caixa-valor").value = "";
-    carregarCaixa();
-}
-
-// Global para poder chamar no onclick do HTML gerado via JS
-window.apagarCaixa = async (id) => {
-    if(confirm("Excluir lançamento?")) {
-        await DB.excluirCaixa(id);
-        carregarCaixa();
-    }
-};
-
-
-// --- OUTROS (DASHBOARD/CRUD) ---
 async function carregarDashboard() {
-    const funcs = await DB.getFuncionarios();
-    $("total-funcs").textContent = funcs.length;
-    $("data-hoje").textContent = new Date().toLocaleDateString('pt-BR');
-    
-    // Saldo dashboard
-    const cx = await DB.getCaixa();
-    let s = 0;
-    cx.forEach(x => {
-        if(x.tipo==='entrada') s += parseFloat(x.valor);
-        else s -= parseFloat(x.valor);
-    });
-    $("dash-saldo").textContent = moeda(s);
+    const prods = await DB.list(CONFIG.TABLES.PRODUTOS);
+    const funcs = await DB.list(CONFIG.TABLES.FUNCIONARIOS);
+    $("dash-estoque-qtd").textContent = prods.length;
+    $("dash-total-funcs").textContent = funcs.length;
+    renderCaixa(); // Atualiza saldo
 }
 
-async function carregarFuncionarios() {
-    const lista = await DB.getFuncionarios();
-    STATE.funcionarios = lista;
-    const tbody = $("lista-funcionarios-corpo");
-    tbody.innerHTML = "";
-    lista.forEach(f => {
-        tbody.innerHTML += `<tr>
-            <td>${f.nome}</td>
-            <td>${f.cpf||'-'}</td>
-            <td>${f.funcao||'-'}</td>
-            <td><button class="btn-excluir" onclick="delFunc('${f.id}')">Excluir</button></td>
-        </tr>`;
-    });
-}
-window.delFunc = async (id) => { if(confirm("Excluir?")) { await DB.excluirFuncionario(id); carregarFuncionarios(); }};
-
-async function carregarUsuarios() {
-    const lista = await DB.getUsuarios();
-    const tbody = $("lista-usuarios-corpo");
-    tbody.innerHTML = "";
-    lista.forEach(u => {
-        tbody.innerHTML += `<tr>
-            <td>${u.nome}</td>
-            <td>${u.login}</td>
-            <td>${u.perfil}</td>
-            <td><button class="btn-excluir" onclick="delUser('${u.id}')">Excluir</button></td>
-        </tr>`;
-    });
-}
-window.delUser = async (id) => { if(confirm("Excluir?")) { await DB.excluirUsuario(id); carregarUsuarios(); }};
-
-// --- APONTAMENTO ---
-async function prepararApontamento() {
-    const lista = await DB.getFuncionarios();
+// --- PONTO ---
+async function carregarPonto() {
+    const funcs = await DB.list(CONFIG.TABLES.FUNCIONARIOS);
     const sel = $("apontamento-funcionario");
     sel.innerHTML = "";
-    lista.forEach(f => {
-        sel.innerHTML += `<option value="${f.id}">${f.nome}</option>`;
-    });
-    carregarApontamentoDoDia();
+    funcs.forEach(f => sel.innerHTML += `<option value="${f.id}">${f.nome}</option>`);
     
-    if (STATE.user.perfil === "Admin") {
-        $("btnApEditar").style.display = "inline-block";
-    } else {
-        $("btnApEditar").style.display = "none";
-        hide("apontamento-manual");
-    }
+    sel.onchange = carregarStatusPonto;
+    carregarStatusPonto();
 }
 
-async function carregarApontamentoDoDia() {
+async function carregarStatusPonto() {
     const fid = $("apontamento-funcionario").value;
     if(!fid) return;
+    const data = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-'); // YYYY-MM-DD
+    $("apontamento-data").textContent = dataBR(data);
     
-    ["entrada", "int-ini", "int-fim", "saida"].forEach(k => $(`apontamento-hora-${k}`).textContent = "-");
-    $("apontamento-status").textContent = "Carregando...";
-
-    const ap = await DB.getApontamento(fid, hojeISO());
+    ["entrada","int-ini","int-fim","saida"].forEach(k => $("hora-"+k).textContent = "-");
     
-    $("apontamento-data").textContent = new Date().toLocaleDateString('pt-BR');
-    $("apontamento-status").textContent = ap ? (ap.locked ? "Finalizado" : "Em andamento") : "Sem lançamento";
+    // Busca apontamento (simplificado)
+    const lista = await DB.list(CONFIG.TABLES.APONTAMENTOS);
+    const ap = lista.find(a => a.funcionario_id === fid && a.data === data);
     
     if(ap) {
-        $("apontamento-hora-entrada").textContent = ap.entrada || "-";
-        $("apontamento-hora-int-ini").textContent = ap.int_inicio || "-";
-        $("apontamento-hora-int-fim").textContent = ap.int_fim || "-";
-        $("apontamento-hora-saida").textContent = ap.saida || "-";
+        $("apontamento-status").textContent = "Registro encontrado";
+        if(ap.entrada) $("hora-entrada").textContent = ap.entrada;
+        if(ap.int_ini) $("hora-int-ini").textContent = ap.int_ini;
+        if(ap.int_fim) $("hora-int-fim").textContent = ap.int_fim;
+        if(ap.saida) $("hora-saida").textContent = ap.saida;
+    } else {
+        $("apontamento-status").textContent = "Nenhum registro hoje";
     }
 }
 
-async function registrarPonto(campo) {
+async function baterPonto(campo) {
     const fid = $("apontamento-funcionario").value;
-    if(!fid) return alert("Selecione um funcionário!");
+    if(!fid) return alert("Selecione funcionário");
+    const data = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
+    const hora = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
     
-    const data = hojeISO();
-    const hora = agoraHora();
-    const obs = $("apontamento-obs").value;
-
-    try {
-        const atual = await DB.getApontamento(fid, data);
-        if(atual && atual[campo]) throw new Error("Horário já marcado!");
-        if(campo === 'saida' && atual && atual.locked) throw new Error("Dia já encerrado.");
-
-        const payload = { funcionario_id: fid, data };
-        if (atual) {
-            payload.entrada = atual.entrada;
-            payload.int_inicio = atual.int_inicio;
-            payload.int_fim = atual.int_fim;
-            payload.saida = atual.saida;
-        }
-        
-        payload[campo] = hora;
-        if(obs) payload.obs = obs;
-        if(campo === 'saida') payload.locked = true;
-
-        await DB.salvarApontamento(payload);
-        carregarApontamentoDoDia();
-        alert("Marcado: " + hora);
-    } catch (e) { alert("Atenção: " + e.message); }
+    // Lógica simples: busca, atualiza ou cria
+    const lista = await DB.list(CONFIG.TABLES.APONTAMENTOS);
+    let ap = lista.find(a => a.funcionario_id === fid && a.data === data);
+    
+    if(ap && ap[campo]) return alert("Já marcado!");
+    
+    if(!ap) { ap = {funcionario_id: fid, data: data}; }
+    ap[campo] = hora; // ex: ap.entrada = "08:00"
+    
+    // Mapeamento nomes campos
+    const map = { "btnApEntrada":"entrada", "btnApIntIni":"int_ini", "btnApIntFim":"int_fim", "btnApSaida":"saida" };
+    
+    await DB.save(CONFIG.TABLES.APONTAMENTOS, ap);
+    carregarStatusPonto();
+    alert("Ponto registrado: " + hora);
 }
 
-// --- STARTUP ---
-window.addEventListener("load", () => {
-    // Binds
-    $("btnLogin").onclick = DB.login.bind(DB, $("usuario").value, $("senha").value); 
-    // Fix bind login
-    $("btnLogin").onclick = async () => {
-         try {
-             const u = await DB.login($("usuario").value, $("senha").value);
-             STATE.user = u;
-             localStorage.setItem("triboom_last_user_v2", JSON.stringify(u));
-             hide("tela-login");
-             $("tela-dashboard").style.display = "flex";
-             $("display-nome-usuario").textContent = u.nome;
-             navegar("dashboard");
-         } catch(e) { $("msg-erro").textContent = e.message; }
-    };
+// --- MODAIS DINÂMICOS ---
+function abrirModal(tipo) {
+    const modal = $("modal-generico");
+    const titulo = $("modal-titulo");
+    const content = $("modal-form-content");
+    const btn = $("btnModalSalvar");
     
-    document.querySelector(".btn-sair").onclick = () => {
-        STATE.user = null;
-        localStorage.removeItem("triboom_last_user_v2");
-        window.location.reload();
+    modal.style.display = "block";
+    content.innerHTML = "";
+    
+    // Construtor de formulário
+    const addInput = (id, label, type="text") => {
+        content.innerHTML += `<label>${label}</label><input id="mod-${id}" type="${type}" style="width:100%; padding:8px; margin-bottom:10px;">`;
     };
 
-    document.querySelectorAll(".sidebar li").forEach(li => {
-        li.onclick = () => navegar(li.dataset.target);
-    });
-
-    // Apontamento
-    $("btnApEntrada").onclick = () => registrarPonto("entrada");
-    $("btnApIntIni").onclick = () => registrarPonto("int_inicio");
-    $("btnApIntFim").onclick = () => registrarPonto("int_fim");
-    $("btnApSaida").onclick = () => registrarPonto("saida");
-    $("apontamento-funcionario").onchange = carregarApontamentoDoDia;
-
-    // Relatorio
-    $("btnGerarRelatorio").onclick = carregarTabelaRelatorio;
-
-    // Caixa
-    $("btnLancarCaixa").onclick = lancarCaixa;
-
-    // Modais e CRUDs
-    const mUser = $("modal-usuario"), mFunc = $("modal-funcionario");
-    document.querySelectorAll(".close-modal").forEach(s => s.onclick = () => { mUser.style.display="none"; mFunc.style.display="none"; });
-    
-    $("btnNovoUsuario").onclick = () => { $("usuario_id_edit").value=""; $("user_nome").value=""; mUser.style.display="block"; };
-    $("btnNovoFuncionario").onclick = () => { $("func_id_edit").value=""; $("func_nome").value=""; mFunc.style.display="block"; };
-
-    $("btnSalvarUsuario").onclick = async () => {
-        try {
-            await DB.salvarUsuario({
-                id: $("usuario_id_edit").value || null,
-                nome: $("user_nome").value,
-                login: $("user_login").value,
-                senha: $("user_senha").value,
-                perfil: $("user_perfil").value,
-                ativo: true
+    if(tipo === "produto") {
+        titulo.textContent = "Novo Produto";
+        addInput("codigo","Código"); addInput("nome","Nome"); addInput("grupo","Grupo"); addInput("qtd","Quantidade","number"); addInput("preco","Preço Venda","number");
+        btn.onclick = async () => {
+            await DB.save(CONFIG.TABLES.PRODUTOS, {
+                codigo: $("mod-codigo").value, nome: $("mod-nome").value, grupo: $("mod-grupo").value,
+                qtd: Number($("mod-qtd").value), preco: Number($("mod-preco").value)
             });
-            mUser.style.display="none"; carregarUsuarios(); alert("Salvo!");
-        } catch(e){alert(e.message);}
-    };
-
-    $("btnSalvarFuncionario").onclick = async () => {
-        try {
-            await DB.salvarFuncionario({
-                id: $("func_id_edit").value || null,
-                nome: $("func_nome").value,
-                cpf: $("func_cpf").value,
-                funcao: $("func_funcao").value,
-                ativo: true
-            });
-            mFunc.style.display="none"; carregarFuncionarios(); alert("Salvo!");
-        } catch(e){alert(e.message);}
-    };
-    
-    // Auto Login
-    const saved = localStorage.getItem("triboom_last_user_v2");
-    if(saved) {
-        try {
-            STATE.user = JSON.parse(saved);
-            hide("tela-login");
-            $("tela-dashboard").style.display = "flex";
-            $("display-nome-usuario").textContent = STATE.user.nome;
-            navegar("dashboard");
-        } catch(e){}
+            modal.style.display="none"; navegar("produtos");
+        };
     }
+    else if(tipo === "fornecedor") {
+        titulo.textContent = "Novo Fornecedor";
+        addInput("nome","Razão Social"); addInput("contato","Nome Contato"); addInput("telefone","Telefone");
+        btn.onclick = async () => {
+            await DB.save(CONFIG.TABLES.FORNECEDORES, { nome: $("mod-nome").value, contato: $("mod-contato").value, telefone: $("mod-telefone").value });
+            modal.style.display="none"; navegar("fornecedores");
+        };
+    }
+    else if(tipo === "despesa" || tipo === "receita") {
+        titulo.textContent = tipo === "despesa" ? "Nova Despesa" : "Nova Receita";
+        addInput("desc","Descrição"); addInput("valor","Valor (R$)","number"); addInput("data","Data","date");
+        btn.onclick = async () => {
+            await DB.save(CONFIG.TABLES.FINANCEIRO, { 
+                descricao: $("mod-desc").value, valor: Number($("mod-valor").value), 
+                data: $("mod-data").value, tipo: tipo 
+            });
+            modal.style.display="none"; navegar("financeiro");
+        };
+    }
+    // Adicione outros tipos (nota, funcionario) seguindo o padrão...
+    else if(tipo === "funcionario") {
+        titulo.textContent = "Novo Funcionário";
+        addInput("nome","Nome"); addInput("cpf","CPF"); addInput("funcao","Função");
+        btn.onclick = async () => {
+            await DB.save(CONFIG.TABLES.FUNCIONARIOS, { nome: $("mod-nome").value, cpf: $("mod-cpf").value, funcao: $("mod-funcao").value });
+            modal.style.display="none"; navegar("funcionarios");
+        };
+    }
+}
+
+// --- EVENTOS GLOBAIS ---
+window.addEventListener("load", () => {
+    // Login
+    $("btnLogin").onclick = async () => {
+        try {
+            const u = await DB.login($("usuario").value, $("senha").value);
+            STATE.user = u;
+            $("tela-login").style.display="none"; $("tela-dashboard").style.display="flex";
+            $("display-nome-usuario").textContent = u.nome;
+            navegar("dashboard");
+        } catch(e) { $("msg-erro").textContent = e.message; }
+    };
+    $(".btn-sair").onclick = () => window.location.reload();
+    
+    // Menu
+    document.querySelectorAll(".sidebar li").forEach(li => li.onclick = () => navegar(li.dataset.target));
+    
+    // Botões de Ação
+    $("btnNovoProduto").onclick = () => abrirModal("produto");
+    $("btnNovoFornecedor").onclick = () => abrirModal("fornecedor");
+    $("btnNovaDespesa").onclick = () => abrirModal("despesa");
+    $("btnNovaReceita").onclick = () => abrirModal("receita");
+    $("btnNovoFuncionario").onclick = () => abrirModal("funcionario");
+    $("btnNovoUsuario").onclick = () => alert("Use a tela de usuários antiga ou crie lógica similar no app.js"); 
+
+    // Ponto
+    $("btnApEntrada").onclick = () => baterPonto("entrada");
+    $("btnApIntIni").onclick = () => baterPonto("int_ini");
+    $("btnApIntFim").onclick = () => baterPonto("int_fim");
+    $("btnApSaida").onclick = () => baterPonto("saida");
+    
+    // Caixa Rápido
+    $("btnLancarCaixa").onclick = async () => {
+        const desc = $("caixa-desc").value;
+        const val = $("caixa-valor").value;
+        if(!desc || !val) return alert("Preencha tudo");
+        await DB.save(CONFIG.TABLES.CAIXA, { descricao: desc, valor: Number(val), tipo: $("caixa-tipo").value });
+        $("caixa-desc").value=""; $("caixa-valor").value=""; renderCaixa();
+    };
+
+    // Fechar Modal
+    $(".close-modal").onclick = () => $("modal-generico").style.display="none";
 });
+
+// Helper Global para Excluir
+window.excluirItem = async (tabela, id) => {
+    if(confirm("Excluir item?")) {
+        await DB.delete(CONFIG.TABLES[tabela.toUpperCase()] || tabela, id);
+        // Recarrega a tela atual
+        navegar(STATE.route); 
+    }
+};

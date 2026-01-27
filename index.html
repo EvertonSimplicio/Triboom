@@ -3,25 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Triboom - Ponto Eletrônico</title>
+  <title>Triboom - Sistema Completo</title>
   <link rel="stylesheet" href="style.css">
+  
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
   <div id="tela-login" class="login-container">
     <div class="login-box">
-      <img src="imagens/Logo.jpg" alt="Logo Triboom" class="logo-login">
+      <img src="imagens/Logo.jpg" alt="Logo" class="logo-login">
       <h2>Acesso ao Sistema</h2>
       <div class="input-group">
         <label>Usuário</label>
-        <input type="text" id="usuario" placeholder="Digite seu usuário">
+        <input type="text" id="usuario" placeholder="Ex: admin">
       </div>
       <div class="input-group">
         <label>Senha</label>
-        <input type="password" id="senha" placeholder="Digite sua senha">
+        <input type="password" id="senha" placeholder="******">
       </div>
-      <button id="btnLogin">ENTRAR</button>
+      <button id="btnLogin">ENTRAR NO SISTEMA</button>
       <p id="msg-erro" class="erro"></p>
     </div>
   </div>
@@ -35,12 +37,16 @@
       </div>
       <nav>
         <ul>
-          <li data-target="dashboard" class="ativo">🏠 Início</li>
-          <li data-target="apontamento">⏱️ Apontamento</li>
-          <li data-target="relatorios">📊 Relatórios</li>
-          <li data-target="caixa">💰 Caixa</li>
-          <li data-target="funcionarios">👥 Funcionários</li>
-          <li data-target="usuarios">🔐 Usuários</li>
+          <li data-target="dashboard" class="ativo"><span class="material-icons">dashboard</span> Início</li>
+          <li data-target="produtos"><span class="material-icons">inventory_2</span> Produtos</li>
+          <li data-target="financeiro"><span class="material-icons">attach_money</span> Financeiro</li>
+          <li data-target="caixa"><span class="material-icons">point_of_sale</span> Caixa</li>
+          <li data-target="notas"><span class="material-icons">receipt</span> Notas</li>
+          <li data-target="apontamento"><span class="material-icons">schedule</span> Ponto</li>
+          <li data-target="relatorios"><span class="material-icons">bar_chart</span> Relatórios</li>
+          <li data-target="funcionarios"><span class="material-icons">badge</span> Funcionários</li>
+          <li data-target="fornecedores"><span class="material-icons">local_shipping</span> Fornecedores</li>
+          <li data-target="usuarios"><span class="material-icons">people</span> Usuários</li>
         </ul>
       </nav>
       <div class="sidebar-footer">
@@ -51,194 +57,159 @@
 
     <main class="content">
       <header class="topbar">
-        <button id="btn-menu-mobile">☰</button>
-        <h2 id="titulo-secao">INÍCIO</h2>
+        <button id="btn-menu-mobile"><span class="material-icons">menu</span></button>
+        <h2 id="titulo-secao">VISÃO GERAL</h2>
       </header>
 
       <section id="view-dashboard" class="view-section">
         <div class="cards-resumo">
           <div class="card">
-            <h3>Funcionários</h3>
-            <p id="total-funcs">0</p>
+            <h3>Estoque Total</h3>
+            <p id="dash-estoque-qtd">0</p>
           </div>
           <div class="card">
             <h3>Saldo Caixa</h3>
-            <p id="dash-saldo">R$ 0,00</p>
+            <p id="dash-caixa-saldo" style="color: green;">R$ 0,00</p>
           </div>
           <div class="card">
-            <h3>Hoje</h3>
-            <p id="data-hoje">-</p>
+            <h3>Funcionários</h3>
+            <p id="dash-total-funcs">0</p>
           </div>
         </div>
       </section>
 
-      <section id="view-apontamento" class="view-section" style="display:none;">
-        <div class="apontamento-card">
-            <div class="sel-funcionario-box">
-                <label>Funcionário:</label>
-                <select id="apontamento-funcionario"></select>
-            </div>
-            
-            <div class="data-display">
-                <h3 id="apontamento-data">--/--/----</h3>
-                <p id="apontamento-status">Carregando...</p>
-            </div>
-
-            <div class="botoes-ponto">
-                <button id="btnApEntrada" class="btn-ponto entrada">ENTRADA<br><span id="apontamento-hora-entrada">-</span></button>
-                <button id="btnApIntIni" class="btn-ponto intervalo">SAÍDA INT.<br><span id="apontamento-hora-int-ini">-</span></button>
-                <button id="btnApIntFim" class="btn-ponto intervalo">VOLTA INT.<br><span id="apontamento-hora-int-fim">-</span></button>
-                <button id="btnApSaida" class="btn-ponto saida">SAÍDA<br><span id="apontamento-hora-saida">-</span></button>
-            </div>
-
-            <div class="obs-box">
-                <label>Observação:</label>
-                <input type="text" id="apontamento-obs" placeholder="Opcional">
-            </div>
-
-            <button id="btnApEditar" style="display:none; margin-top:10px;">Editar Manualmente</button>
+      <section id="view-produtos" class="view-section" style="display:none;">
+        <div class="toolbar">
+            <input type="text" id="busca-produto" placeholder="Buscar produto..." style="flex:2;">
+            <button id="btnNovoProduto" class="btn-add">+ Novo Produto</button>
         </div>
-
-        <div id="apontamento-manual" style="display:none; border:1px solid #ccc; padding:10px; margin-top:10px; background:white;">
-            <h4>Lançamento Manual (Admin)</h4>
-            <label>Data: <input type="date" id="ap-man-data"></label><br>
-            <label><input type="checkbox" id="ap-man-folga"> É Folga?</label>
-            <div class="grid-manual">
-                <input type="time" id="ap-man-entrada" title="Entrada">
-                <input type="time" id="ap-man-int-ini" title="Início Intervalo">
-                <input type="time" id="ap-man-int-fim" title="Fim Intervalo">
-                <input type="time" id="ap-man-saida" title="Saída">
-            </div>
-            <button id="btnApSalvarManual" style="margin-top:10px;">Salvar Ajuste</button>
-        </div>
+        <table class="tabela-padrao">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Nome</th>
+                    <th>Grupo</th>
+                    <th>Qtd</th>
+                    <th>Preço</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="lista-produtos"></tbody>
+        </table>
       </section>
 
-      <section id="view-relatorios" class="view-section" style="display:none;">
-          <div class="card" style="text-align:left; margin-bottom:20px;">
-              <label>Funcionário:</label>
-              <select id="rel-func-select" style="padding:8px; margin-right:10px;"></select>
-              <label>De:</label>
-              <input type="date" id="rel-data-ini" style="padding:8px;">
-              <label>Até:</label>
-              <input type="date" id="rel-data-fim" style="padding:8px;">
-              <button id="btnGerarRelatorio" class="btn-add" style="margin-left:10px;">Filtrar</button>
-          </div>
-          <table class="tabela-padrao">
-              <thead>
-                  <tr>
-                      <th>Data</th>
-                      <th>Entrada</th>
-                      <th>Int. Ini</th>
-                      <th>Int. Fim</th>
-                      <th>Saída</th>
-                      <th>Obs</th>
-                  </tr>
-              </thead>
-              <tbody id="lista-relatorios-corpo"></tbody>
-          </table>
+      <section id="view-financeiro" class="view-section" style="display:none;">
+        <div class="toolbar">
+            <button id="btnNovaDespesa" class="btn-add" style="background:#c0392b;">- Nova Despesa</button>
+            <button id="btnNovaReceita" class="btn-add" style="background:#27ae60;">+ Nova Receita</button>
+        </div>
+        <table class="tabela-padrao">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Descrição</th>
+                    <th>Tipo</th>
+                    <th>Valor</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="lista-financeiro"></tbody>
+        </table>
       </section>
 
       <section id="view-caixa" class="view-section" style="display:none;">
-          <div class="cards-resumo" style="margin-bottom:20px;">
-              <div class="card">
-                  <h3>Saldo Atual</h3>
-                  <p id="caixa-saldo-topo" style="color:#27ae60;">R$ 0,00</p>
-              </div>
-          </div>
-          
-          <div class="card" style="text-align:left; margin-bottom:20px;">
-              <h4>Nova Movimentação</h4>
-              <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-                  <input type="text" id="caixa-desc" placeholder="Descrição (ex: Café)" style="flex:2; padding:8px;">
-                  <input type="number" id="caixa-valor" placeholder="Valor (R$)" step="0.01" style="flex:1; padding:8px;">
-                  <select id="caixa-tipo" style="padding:8px;">
-                      <option value="saida">🔴 Saída (Gasto)</option>
-                      <option value="entrada">🟢 Entrada (Ganho)</option>
+          <div class="card" style="margin-bottom:20px; text-align:left;">
+              <h3>Caixa Atual: <span id="caixa-valor-topo">R$ 0,00</span></h3>
+              <div style="display:flex; gap:10px; margin-top:10px;">
+                  <input type="text" id="caixa-desc" placeholder="Ex: Venda Balcão">
+                  <input type="number" id="caixa-valor" placeholder="R$ 0,00">
+                  <select id="caixa-tipo">
+                      <option value="entrada">Entrada</option>
+                      <option value="saida">Saída</option>
                   </select>
                   <button id="btnLancarCaixa" class="btn-add" style="margin:0;">Lançar</button>
               </div>
           </div>
-
           <table class="tabela-padrao">
-              <thead>
-                  <tr>
-                      <th>Data</th>
-                      <th>Descrição</th>
-                      <th>Tipo</th>
-                      <th>Valor</th>
-                      <th>Ação</th>
-                  </tr>
-              </thead>
-              <tbody id="lista-caixa-corpo"></tbody>
+              <thead><tr><th>Hora</th><th>Descrição</th><th>Valor</th><th>Tipo</th></tr></thead>
+              <tbody id="lista-caixa"></tbody>
           </table>
       </section>
 
-      <section id="view-funcionarios" class="view-section" style="display:none;">
-        <button id="btnNovoFuncionario" class="btn-add">+ Novo Funcionário</button>
+      <section id="view-notas" class="view-section" style="display:none;">
+        <button id="btnNovaNota" class="btn-add">+ Lançar Nota</button>
         <table class="tabela-padrao">
             <thead>
                 <tr>
-                    <th>Nome</th>
-                    <th>CPF</th>
-                    <th>Função</th>
+                    <th>Número</th>
+                    <th>Fornecedor</th>
+                    <th>Data</th>
+                    <th>Valor Total</th>
                     <th>Ações</th>
                 </tr>
             </thead>
-            <tbody id="lista-funcionarios-corpo"></tbody>
+            <tbody id="lista-notas"></tbody>
         </table>
       </section>
 
+      <section id="view-apontamento" class="view-section" style="display:none;">
+        <div class="apontamento-card">
+            <label>Selecione o Funcionário:</label>
+            <select id="apontamento-funcionario" style="width:100%; padding:10px; margin-bottom:15px;"></select>
+            
+            <h2 id="apontamento-data" style="color:#2c3e50;">--/--/----</h2>
+            <p id="apontamento-status">Carregando...</p>
+            
+            <div class="botoes-ponto">
+                <button id="btnApEntrada" class="btn-ponto entrada">ENTRADA<br><span id="hora-entrada">-</span></button>
+                <button id="btnApIntIni" class="btn-ponto intervalo">SAÍDA INT.<br><span id="hora-int-ini">-</span></button>
+                <button id="btnApIntFim" class="btn-ponto intervalo">VOLTA INT.<br><span id="hora-int-fim">-</span></button>
+                <button id="btnApSaida" class="btn-ponto saida">SAÍDA<br><span id="hora-saida">-</span></button>
+            </div>
+            <input type="text" id="apontamento-obs" placeholder="Observação (Opcional)" style="width:100%; padding:10px;">
+        </div>
+      </section>
+
+      <section id="view-relatorios" class="view-section" style="display:none;">
+          <div class="toolbar">
+              <select id="rel-tipo" style="padding:10px;">
+                  <option value="ponto">Relatório de Ponto</option>
+                  <option value="financeiro">Relatório Financeiro</option>
+              </select>
+              <button id="btnGerarRelatorio" class="btn-add">Gerar</button>
+          </div>
+          <div id="area-relatorio-resultado">
+              <p>Selecione um tipo e clique em Gerar.</p>
+          </div>
+      </section>
+
+      <section id="view-funcionarios" class="view-section" style="display:none;">
+          <button id="btnNovoFuncionario" class="btn-add">+ Novo Funcionário</button>
+          <table class="tabela-padrao"><tbody id="lista-funcionarios"></tbody></table>
+      </section>
+      
+      <section id="view-fornecedores" class="view-section" style="display:none;">
+          <button id="btnNovoFornecedor" class="btn-add">+ Novo Fornecedor</button>
+          <table class="tabela-padrao"><tbody id="lista-fornecedores"></tbody></table>
+      </section>
+
       <section id="view-usuarios" class="view-section" style="display:none;">
-        <button id="btnNovoUsuario" class="btn-add">+ Novo Usuário</button>
-        <table class="tabela-padrao">
-            <thead>
-                <tr>
-                    <th>Nome</th>
-                    <th>Login</th>
-                    <th>Perfil</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody id="lista-usuarios-corpo"></tbody>
-        </table>
+          <button id="btnNovoUsuario" class="btn-add">+ Novo Usuário</button>
+          <table class="tabela-padrao"><tbody id="lista-usuarios"></tbody></table>
       </section>
 
     </main>
   </div>
 
-  <div id="modal-usuario" class="modal">
+  <div id="modal-generico" class="modal">
     <div class="modal-content">
         <span class="close-modal">&times;</span>
-        <h3>Salvar Usuário</h3>
-        <input type="hidden" id="usuario_id_edit">
-        <label>Nome:</label><input type="text" id="user_nome">
-        <label>Login:</label><input type="text" id="user_login">
-        <label>Senha:</label><input type="text" id="user_senha">
-        <label>Perfil:</label>
-        <select id="user_perfil">
-            <option value="Funcionario">Funcionário</option>
-            <option value="Admin">Administrador</option>
-        </select>
-        <button id="btnSalvarUsuario" class="btn-save">Salvar</button>
+        <h3 id="modal-titulo">Título</h3>
+        <div id="modal-form-content"></div> <button id="btnModalSalvar" class="btn-save">Salvar</button>
     </div>
   </div>
 
-  <div id="modal-funcionario" class="modal">
-    <div class="modal-content">
-        <span class="close-modal">&times;</span>
-        <h3>Salvar Funcionário</h3>
-        <input type="hidden" id="func_id_edit">
-        <label>Nome Completo:</label><input type="text" id="func_nome">
-        <label>CPF:</label><input type="text" id="func_cpf">
-        <label>Função:</label><input type="text" id="func_funcao">
-        <button id="btnSalvarFuncionario" class="btn-save">Salvar</button>
-    </div>
-  </div>
-<script src="secrets.js"></script>
-
-  <script src="app.js"></script>
-</body>
-</html>
+  <script src="secrets.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
