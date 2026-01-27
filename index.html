@@ -1,878 +1,184 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Gestão</title>
-    
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <style>
-        /* ================= ESTILOS GERAIS ================= */
-        :root { --primary: #2c3e50; --secondary: #34495e; --accent: #3498db; --bg: #ecf0f1; --text: #2c3e50; }
-        * { box-sizing: border-box; outline: none; }
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
-        
-        /* TELA LOGIN */
-        #tela-login { display: flex; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, var(--primary), var(--secondary)); flex-direction: column; }
-        .login-logo { max-width: 300px; margin-bottom: 20px; border-radius: 10px; }
-        .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 350px; text-align: center; }
-        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
-        .btn-login { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        .btn-login:hover { background: #2980b9; }
-
-        /* DASHBOARD LAYOUT */
-        #tela-dashboard { display: none; height: 100vh; }
-        .sidebar { width: 250px; background: var(--primary); color: white; display: flex; flex-direction: column; overflow: hidden; }
-        .sidebar h2 { text-align: center; padding: 20px 0; background: rgba(0,0,0,0.2); margin: 0; }
-        .sidebar ul { list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 16px; }
-        .sidebar li { padding: 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); cursor: pointer; display: flex; align-items: center; transition: 0.3s; }
-        .sidebar li:hover, .sidebar li.ativo { background: var(--accent); }
-        .sidebar li .material-icons { margin-right: 10px; }
-        
-        .main-content { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .btn-sair { background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
-
-        /* VIEW & TABELAS */
-        .view-section { display: none; animation: fadeIn 0.3s; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        
-        .toolbar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .toolbar input, .toolbar select { padding: 10px; border: 1px solid #ccc; border-radius: 5px; flex: 1; }
-        .btn-action { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; color: white; background: var(--secondary); display: flex; align-items: center; gap: 5px; }
-        .btn-add { background: var(--accent); }
-        
-        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #f8f9fa; color: #555; font-weight: 600; }
-        tr:hover { background: #f1f1f1; }
-
-        /* MODAIS */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); overflow: auto; }
-        .modal-content { background: white; margin: 5% auto; padding: 25px; border-radius: 8px; width: 90%; max-width: 600px; position: relative; animation: slideDown 0.3s; }
-        @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .close { position: absolute; right: 20px; top: 15px; font-size: 24px; cursor: pointer; color: #aaa; }
-        .close:hover { color: #000; }
-        
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 13px; color: #555; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
-        .form-row { display: flex; gap: 15px; }
-        .actions { text-align: right; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
-        
-        /* CARD DASHBOARD */
-        .card-container { display: flex; gap: 20px; flex-wrap: wrap; }
-        .card { flex: 1; min-width: 200px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
-        .card h3 { margin: 0; color: #7f8c8d; font-size: 14px; }
-        .card .valor { font-size: 24px; font-weight: bold; color: var(--primary); margin-top: 10px; }
-        
-        /* CHECKBOX FINANCEIRO */
-        .opt-tipo { display: flex; gap: 10px; margin-bottom: 15px; }
-        .opt-tipo div { flex: 1; padding: 10px; text-align: center; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; }
-        .opt-tipo div.selected { background: var(--primary); color: white; border-color: var(--primary); }
-
-        .lista-sugestoes { list-style: none; padding: 0; margin: 0; border: 1px solid #ddd; position: absolute; width: 100%; background: white; max-height: 150px; overflow-y: auto; z-index: 10; display: none; }
-        .lista-sugestoes li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
-        .lista-sugestoes li:hover { background: #f0f0f0; }
-
-        #container-parcelas-geradas { max-height: 200px; overflow-y: auto; padding-right: 5px; }
-        .item-parcela { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
-    
-
-        /* ================= MOBILE RESPONSIVO ================= */
-        .btn-menu { display: none; }
-
-        .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-        .header-right { display: flex; align-items: center; gap: 12px; }
-
-        /* Botão de conta (mobile) - aparece quando o texto "Olá, Nome" é ocultado */
-        .btn-user-mobile{
-          display: none;
-          align-items: center;
-          justify-content: center;
-          width: 44px;
-          height: 44px;
-          border: 0;
-          border-radius: 12px;
-          background: rgba(15,23,42,0.08);
-          border: 1px solid rgba(15,23,42,0.18);
-          box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-          cursor: pointer;
-          padding: 0;
-        }
-        .btn-user-mobile .material-icons{ font-size: 26px; color: #0f172a; }
-
-        /* melhora toque em inputs/botoes */
-        input, select, button { min-height: 44px; }
-
-        @media (max-width: 900px) {
-          body { overflow: hidden; }
-
-          /* sidebar vira drawer */
-          .btn-menu {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 42px;
-            height: 42px;
-            border: none;
-            border-radius: 10px;
-            background: var(--secondary);
-            color: #fff;
-            cursor: pointer;
-            flex: 0 0 auto;
-          }
-          .btn-menu .material-icons { margin: 0; }
-
-          .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            height: 100vh;
-            width: min(82vw, 320px);
-            z-index: 1000;
-            transform: translateX(-105%);
-            transition: transform .25s ease;
-            box-shadow: 0 8px 24px rgba(0,0,0,.25);
-          }
-
-          .sidebar > div { padding: 16px 12px !important; }
-          .sidebar img { width: 85% !important; max-width: 220px; }
-          .sidebar h2 { font-size: 1.05rem !important; }
-
-          /* overlay */
-          .sidebar-backdrop {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,.35);
-            z-index: 900;
-          }
-
-          /* quando aberto */
-          #tela-dashboard.sidebar-open .sidebar { transform: translateX(0); }
-          #tela-dashboard.sidebar-open .sidebar-backdrop { display: block; }
-
-          /* conteúdo ocupa tela toda */
-          .main-content { padding: 12px; width: 100%; }
-
-          /* header mais compacto e sticky */
-          .header {
-            position: sticky;
-            top: 0;
-            z-index: 500;
-            gap: 10px;
-            flex-wrap: wrap;
-            padding: 12px;
-          }
-          #titulo-secao { font-size: 1.15rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-          .header-right span { font-size: 0.95rem; }
-          .btn-sair { padding: 10px 14px; border-radius: 8px; }
-
-          /* cards e tabelas */
-          .card-container { flex-direction: column; }
-          .card { width: 100% !important; }
-
-          /* toolbars viram coluna para facilitar toque */
-          .toolbar { flex-direction: column; gap: 10px; }
-          .toolbar > * { width: 100% !important; flex: initial !important; }
-
-          /* apontamento manual fica em coluna */
-          .apontamento-manual {
-            flex-direction: column !important;
-            align-items: stretch !important;
-            gap: 10px !important;
-            width: 100% !important;
-          }
-          .apontamento-manual > div { width: 100% !important; }
-          #btnApSalvarManual { width: 100% !important; margin-top: 0 !important; }
-
-          /* botões do apontamento e ações sempre full */
-          .btn-action { width: 100%; justify-content: center; }
-
-          /* tabelas: permitir scroll horizontal */
-          .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-          table { min-width: 720px; }
-        }
-
-        @media (max-width: 420px) {
-          .main-content { padding: 10px; }
-          #titulo-secao { font-size: 1.05rem; }
-          .header-right span { display: none; } /* esconde "Olá, Nome" para economizar espaço */
-          .btn-user-mobile { display: inline-flex; } /* mostra botão de conta */
-        }
-    
-
-
-        /* ===== Sidebar recolhível (desktop) ===== */
-        .btn-collapse{
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 42px;
-          height: 42px;
-          border: none;
-          border-radius: 10px;
-          background: #eef2f6;
-          color: #2b3a4a;
-          cursor: pointer;
-        }
-        .btn-collapse .material-icons{ margin:0; }
-        @media (max-width: 900px){
-          .btn-collapse{ display:none; }
-        }
-
-        @media (min-width: 901px){
-          #tela-dashboard.sidebar-collapsed .sidebar{ width: 72px; }
-          #tela-dashboard.sidebar-collapsed .sidebar > div{ padding: 14px 8px !important; }
-          #tela-dashboard.sidebar-collapsed .sidebar > div img{ display:none !important; }
-          #tela-dashboard.sidebar-collapsed .sidebar > div h2{ display:none !important; }
-
-          #tela-dashboard.sidebar-collapsed .sidebar li{
-            justify-content:center;
-            padding: 14px 0;
-            font-size: 0; /* esconde o texto */
-          }
-          #tela-dashboard.sidebar-collapsed .sidebar li .material-icons{
-            margin-right: 0;
-            font-size: 24px;
-          }
-        }
-
-
-
-/* ===== IMPRESSÃO (RELATÓRIOS) ===== */
-@media print {
-  /* remove layout geral e menu */
-  body { background: #fff !important; }
-  .sidebar, #sidebar, .menu-lateral, #menu-lateral, .navbar, .topbar, .header, .app-header { display: none !important; }
-  .main-content, .content, #app { margin: 0 !important; padding: 0 !important; width: 100% !important; }
-
-  /* imprime apenas o conteúdo do relatório */
-  .view-section { display: none !important; }
-  #view-relatorios { display: block !important; }
-
-  /* remove filtros/botões e cards */
-  #view-relatorios .toolbar,
-  #view-relatorios .cards-resumo,
-  #view-relatorios .card,
-  #view-relatorios .card-resumo,
-  #view-relatorios .relatorio-cards,
-  #view-relatorios .btn-action,
-  #view-relatorios button,
-  #view-relatorios select,
-  #view-relatorios input { display: none !important; }
-
-  /* garante que as seções/tabelas fiquem 100% */
-  #view-relatorios .relatorio-section,
-  #view-relatorios table { width: 100% !important; }
-  #view-relatorios table { border-collapse: collapse !important; font-size: 11px !important; }
-  #view-relatorios th, #view-relatorios td { padding: 6px 8px !important; }
-
-  /* quebra de página amigável */
-  #view-relatorios table { page-break-inside: auto; }
-  #view-relatorios tr { page-break-inside: avoid; page-break-after: auto; }
-  #view-relatorios thead { display: table-header-group; }
-  #view-relatorios tfoot { display: table-footer-group; }
-}
-
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Triboom - Ponto Eletrônico</title>
+  <link rel="stylesheet" href="style.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-    <div id="tela-login">
-        <img src="imagens/Logo.jpg" alt="Triboom Sorvetes" class="login-logo">
-        <div class="login-box">
-            <h2>Triboom Sorvetes</h2>
-            <input type="text" id="usuario" placeholder="Usuário">
-            <input type="password" id="senha" placeholder="Senha">
-            <button class="btn-login" id="btnLogin" type="button">ENTRAR</button>
-            <p id="msg-erro" style="color: red; margin-top: 10px; font-size: 13px;"></p>
-        </div>
+  <div id="tela-login" class="login-container">
+    <div class="login-box">
+      <img src="imagens/Logo.jpg" alt="Logo Triboom" class="logo-login">
+      <h2>Acesso ao Sistema</h2>
+      <div class="input-group">
+        <label>Usuário</label>
+        <input type="text" id="usuario" placeholder="Digite seu usuário">
+      </div>
+      <div class="input-group">
+        <label>Senha</label>
+        <input type="password" id="senha" placeholder="Digite sua senha">
+      </div>
+      <button id="btnLogin">ENTRAR</button>
+      <p id="msg-erro" class="erro"></p>
     </div>
-
-    <div id="tela-dashboard">
-        <nav class="sidebar">
-            <div style="text-align: center; padding: 20px 10px;">
-                <img src="imagens/Logo.jpg" style="width: 80%; margin-bottom: 10px; border-radius: 10px;">
-                <h2 style="font-size: 1.2rem; background: none; padding:0;">Triboom Sorvetes</h2>
-            </div>
-            <ul>
-                <li data-route="dashboard" class="ativo"><span class="material-icons">dashboard</span> Visão Geral</li>
-                <li data-route="produtos"><span class="material-icons">inventory_2</span> Produtos & Estoque</li>
-                <li data-route="notas_entrada"><span class="material-icons">receipt_long</span> Notas de Entrada</li>
-                <li data-route="financeiro"><span class="material-icons">attach_money</span> Financeiro</li>
-                <li data-route="caixa"><span class="material-icons">point_of_sale</span> Caixa</li>
-                                <li data-route="apontamento"><span class="material-icons">schedule</span> Apontamento</li>
-<li data-route="relatorios"><span class="material-icons">bar_chart</span> Relatórios</li>
-                <li data-route="funcionarios"><span class="material-icons">badge</span> Funcionários</li>
-                <li data-route="fornecedores"><span class="material-icons">local_shipping</span> Fornecedores</li>
-                <li data-route="usuarios"><span class="material-icons">people</span> Usuários</li>
-                <li data-route="configuracoes"><span class="material-icons">settings</span> Configurações</li>
-            </ul>
-        </nav>
-        <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
-
-        <main class="main-content">
-            <div class="header">
-                <div class="header-left">
-                    <button class="btn-menu" id="btnMenu" aria-label="Abrir menu">
-                        <span class="material-icons">menu</span>
-                    </button>
-                    <button class="btn-collapse" id="btnCollapse" aria-label="Esconder menu lateral">
-                        <span class="material-icons" id="iconCollapse">chevron_left</span>
-                    </button>
-                    <h2 id="titulo-secao">DASHBOARD</h2>
-                </div>
-                <div class="header-right" style="display: flex; align-items: center; gap: 15px;">
-                    <span id="btn-perfil-usuario" class="user-greeting" role="button" tabindex="0">Olá, <b id="display-nome-usuario">Usuário</b></span>
-                    <!-- No celular o texto "Olá, Nome" pode ficar oculto para caber no topo.
-                         Por isso mostramos um botão de perfil (ícone) que abre o mesmo modal de troca de senha. -->
-                    <button id="btn-perfil-usuario-mobile" class="btn-user-mobile" type="button" title="Minha conta" aria-label="Minha conta">
-                      <span class="material-icons">account_circle</span>
-                    </button>
-                    <button class="btn-sair" id="btnSair">Sair</button>
-                </div>
-            </div>
-
-            <div id="view-padrao" class="view-section">
-                <div class="card-container" id="rel-cards-fin">
-                    <div class="card"><h3>Total Produtos</h3><div class="valor" id="resumo-qtd">0</div></div>
-                    <div class="card"><h3>Valor Estoque</h3><div class="valor" id="resumo-valor">R$ 0,00</div></div>
-                    <div class="card"><h3>Saldo Financeiro</h3><div class="valor" id="fin-saldo">R$ 0,00</div></div>
-                </div>
-                <div style="margin-top: 40px; text-align: center; color: #aaa;">
-                    <span class="material-icons" style="font-size: 64px;">analytics</span>
-                    <p>Selecione um menu ao lado para começar.</p>
-                </div>
-            </div>
-
-            <div id="view-produtos" class="view-section">
-                <div class="toolbar">
-                    <input type="text" id="barra-pesquisa" placeholder="Buscar produto...">
-                    <select id="filtro-grupo" style="max-width: 200px;"><option value="">Todos Grupos</option></select>
-                    <button class="btn-action btn-add" id="btnAbrirNovoProduto"><span class="material-icons">add</span> Novo</button>
-                    <button class="btn-action" id="btnAbrirContagem"><span class="material-icons">playlist_add_check</span> Contagem</button>
-                    <button class="btn-action" id="btnPDFProdutos" style="background:#e74c3c"><span class="material-icons">picture_as_pdf</span> PDF</button>
-                </div>
-                <table>
-                    <thead><tr><th>Cód.</th><th>Nome</th><th>Grupo</th><th>Qtd</th><th>Preço</th><th>Ações</th></tr></thead>
-                    <tbody id="tabela-produtos-corpo"></tbody>
-                </table>
-            </div>
-
-            <div id="view-notas-entrada" class="view-section">
-                <div class="toolbar">
-                    <button class="btn-action btn-add" id="btnLancarNotaManual"><span class="material-icons">edit_note</span> Lançamento Manual</button>
-                    <button class="btn-action" id="btnImportarXML" style="background:#2ecc71"><span class="material-icons">upload_file</span> Importar XML</button>
-                </div>
-                <table>
-                    <thead><tr><th>Data</th><th>Número</th><th>Fornecedor</th><th>Itens</th><th>Valor Total</th><th>Tipo</th><th>Ações</th></tr></thead>
-                    <tbody id="tabela-notas-corpo"></tbody>
-                </table>
-            </div>
-
-            <div id="view-financeiro" class="view-section">
-                <div class="filters toolbar" style="margin-bottom: 10px;">
-                    <input type="text" id="barra-pesquisa-financeiro" placeholder="Buscar lançamento...">
-                </div>
-                <div class="toolbar">
-                    <button class="btn-action btn-add" id="btnNovaDespesa"><span class="material-icons">add</span> Lançar Manual</button>
-                    <button class="btn-action" id="btnPDFFinanceiro" style="background:#e74c3c"><span class="material-icons">picture_as_pdf</span> PDF</button>
-                </div>
-                <div style="display:flex; gap:20px; margin-bottom:15px; font-weight:bold;">
-                    <span style="color:#27ae60">Receitas: <span id="fin-total-receitas">R$ 0,00</span></span>
-                    <span style="color:#e74c3c">Despesas: <span id="fin-total-despesas">R$ 0,00</span></span>
-                </div>
-                <table>
-                    <thead><tr><th>Vencimento</th><th>Descrição</th><th>Tipo</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
-                    <tbody id="tabela-financeiro-corpo"></tbody>
-                </table>
-            </div>
-
-            <div id="view-caixa" class="view-section" style="display:none;">
-                <div class="toolbar" style="align-items:flex-end; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                    <div style="display:flex; flex-direction:column; min-width:170px;">
-                        <label style="font-size:12px; opacity:.8;">Data</label>
-                        <input type="date" id="caixa-data" />
-                    </div>
-                    <div style="display:flex; flex-direction:column; min-width:220px; flex:1;">
-                        <label style="font-size:12px; opacity:.8;">Sorveteria</label>
-                        <input type="text" id="caixa-loja" placeholder="Ex: Triboom Centro" list="caixa-lojas" />
-                        <datalist id="caixa-lojas"></datalist>
-                    </div>
-
-                    <div style="display:flex; flex-direction:column; min-width:230px;">
-                        <label style="font-size:12px; opacity:.8;">Modo</label>
-                        <label style="display:flex; align-items:center; gap:8px; font-size:13px; padding:10px 12px; border:1px solid #e6e6e6; border-radius:10px; background:#fff;">
-                            <input type="checkbox" id="caixa-modo-lote" />
-                            Lançar vendas do dia (vários valores)
-                        </label>
-                    </div>
-
-                    <div id="caixa-lote-box" style="display:none; flex:2; min-width:420px;">
-                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <div style="display:flex; flex-direction:column; min-width:160px; flex:1;">
-                                <label style="font-size:12px; opacity:.8;">Cartão crédito</label>
-                                <input type="text" id="caixa-lote-credito" placeholder="0,00" />
-                            </div>
-                            <div style="display:flex; flex-direction:column; min-width:160px; flex:1;">
-                                <label style="font-size:12px; opacity:.8;">Cartão débito</label>
-                                <input type="text" id="caixa-lote-debito" placeholder="0,00" />
-                            </div>
-                            <div style="display:flex; flex-direction:column; min-width:160px; flex:1;">
-                                <label style="font-size:12px; opacity:.8;">Pix</label>
-                                <input type="text" id="caixa-lote-pix" placeholder="0,00" />
-                            </div>
-                            <div style="display:flex; flex-direction:column; min-width:160px; flex:1;">
-                                <label style="font-size:12px; opacity:.8;">Dinheiro</label>
-                                <input type="text" id="caixa-lote-dinheiro" placeholder="0,00" />
-                            </div>
-                            <div style="display:flex; flex-direction:column; min-width:260px; flex:2;">
-                                <label style="font-size:12px; opacity:.8;">Observação (opcional)</label>
-                                <input type="text" id="caixa-lote-obs" placeholder="Ex: fechamento do dia" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="caixa-single" style="display:flex; flex-direction:column; min-width:160px;">
-                        <label style="font-size:12px; opacity:.8;">Tipo</label>
-                        <select id="caixa-tipo">
-                            <option value="ENTRADA">Entrada</option>
-                            <option value="SAIDA">Saída</option>
-                        </select>
-                    </div>
-                    <div class="caixa-single" style="display:flex; flex-direction:column; min-width:160px;">
-                        <label style="font-size:12px; opacity:.8;">Forma</label>
-                        <select id="caixa-forma">
-                            <option value="Dinheiro">Dinheiro</option>
-                            <option value="Cartão">Cartão</option>
-                            <option value="Pix">Pix</option>
-                            <option value="Outros">Outros</option>
-                        </select>
-                    </div>
-                    <div class="caixa-single" style="display:flex; flex-direction:column; min-width:260px; flex:2;">
-                        <label style="font-size:12px; opacity:.8;">Descrição</label>
-                        <input type="text" id="caixa-descricao" placeholder="Ex: sangria, troco, vendas do dia..." />
-                    </div>
-                    <div class="caixa-single" style="display:flex; flex-direction:column; min-width:140px;">
-                        <label style="font-size:12px; opacity:.8;">Valor</label>
-                        <input type="text" id="caixa-valor" placeholder="0,00" />
-                    </div>
-                    <button class="btn-action btn-add" id="btnCaixaSalvar"><span class="material-icons">save</span> Salvar</button>
-                    <button class="btn-action" id="btnCaixaAtualizar"><span class="material-icons">refresh</span> Atualizar</button>
-                </div>
-
-                <div style="display:flex; gap:20px; margin-bottom:15px; font-weight:bold; flex-wrap:wrap;">
-                    <span style="color:#27ae60">Entradas: <span id="caixa-total-entradas">R$ 0,00</span></span>
-                    <span style="color:#e74c3c">Saídas: <span id="caixa-total-saidas">R$ 0,00</span></span>
-                    <span style="color:#2c3e50">Saldo: <span id="caixa-total-saldo">R$ 0,00</span></span>
-                </div>
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Data</th>
-                            <th>Sorveteria</th>
-                            <th>Tipo</th>
-                            <th>Forma</th>
-                            <th>Descrição</th>
-                            <th>Valor</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabela-caixa-corpo"></tbody>
-                </table>
-            </div>
-
-            <div id="view-apontamento" class="view-section">
-                <div class="toolbar">
-                    <select id="apontamento-funcionario"></select>
-                    <input id="apontamento-obs" placeholder="Observação (opcional)" />
-                    <button class="btn-action btn-warning" id="btnApEditar" style="display:none;"><span class="material-icons">edit</span> Corrigir</button>
-                    <div id="apontamento-manual" class="apontamento-manual" style="display:none; gap:10px; align-items:center;">
-                        <div style="display:flex; flex-direction:column; font-size:12px; min-width:140px;">
-    <label>Data</label>
-    <input type="date" id="ap-man-data" />
   </div>
-  <div style="display:flex; flex-direction:column; font-size:12px; min-width:120px; justify-content:flex-end; padding-top:18px;">
-    <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin:0;">
-      <input type="checkbox" id="ap-man-folga" /> <span>Folga</span>
-    </label>
-  </div>
-<div style="display:flex; flex-direction:column; font-size:12px;">
-                        <label>Entrada</label>
-                        <input type="time" id="ap-man-entrada" />
-                      </div>
-                      <div style="display:flex; flex-direction:column; font-size:12px;">
-                        <label>Intervalo (início)</label>
-                        <input type="time" id="ap-man-int-ini" />
-                      </div>
-                      <div style="display:flex; flex-direction:column; font-size:12px;">
-                        <label>Intervalo (fim)</label>
-                        <input type="time" id="ap-man-int-fim" />
-                      </div>
-                      <div style="display:flex; flex-direction:column; font-size:12px;">
-                        <label>Saída</label>
-                        <input type="time" id="ap-man-saida" />
-                      </div>
-                      <button class="btn-action btn-add" id="btnApSalvarManual" style="height:40px; margin-top:18px;">
-                        <span class="material-icons">save</span> Salvar
-                      </button>
-                    </div>
-                    <button class="btn-action btn-add" id="btnApEntrada"><span class="material-icons">login</span> Entrada</button>
-                    <button class="btn-action btn-warning" id="btnApIntIni"><span class="material-icons">pause_circle</span> Intervalo (início)</button>
-                    <button class="btn-action btn-warning" id="btnApIntFim"><span class="material-icons">play_circle</span> Intervalo (fim)</button>
-                    <button class="btn-action btn-danger" id="btnApSaida"><span class="material-icons">logout</span> Saída</button>
-                </div>
 
-                <div class="card-container">
-                    <div class="card">
-                        <h3>Hoje (<span id="apontamento-data"></span>)</h3>
-                        <p id="apontamento-status" style="margin-top: 10px; color:#555;"></p>
+  <div id="tela-dashboard" style="display: none;">
+    
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <img src="imagens/Logo.jpg" alt="Logo" class="logo-sidebar">
+        <h3>Triboom</h3>
+      </div>
+      <nav>
+        <ul>
+          <li data-target="dashboard" class="ativo">🏠 Início</li>
+          <li data-target="apontamento">⏱️ Apontamento</li>
+          <li data-target="relatorios">📊 Relatórios</li>
+          <li data-target="funcionarios">👥 Funcionários</li>
+          <li data-target="usuarios">🔐 Usuários</li>
+          <li data-target="caixa">💰 Caixa</li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <span id="display-nome-usuario">Usuário</span>
+        <button class="btn-sair">Sair</button>
+      </div>
+    </aside>
 
-                        <div style="margin-top: 10px; font-size: 14px; line-height: 1.7;">
-                            <div><b>Entrada:</b> <span id="apontamento-hora-entrada">-</span></div>
-                            <div><b>Intervalo (início):</b> <span id="apontamento-hora-int-ini">-</span></div>
-                            <div><b>Intervalo (fim):</b> <span id="apontamento-hora-int-fim">-</span></div>
-                            <div><b>Saída:</b> <span id="apontamento-hora-saida">-</span></div>
-                        </div>
-                    </div>
-                </div>
+    <main class="content">
+      <header class="topbar">
+        <button id="btn-menu-mobile">☰</button>
+        <h2 id="titulo-secao">INÍCIO</h2>
+      </header>
+
+      <section id="view-dashboard" class="view-section">
+        <div class="cards-resumo">
+          <div class="card">
+            <h3>Funcionários</h3>
+            <p id="total-funcs">0</p>
+          </div>
+          <div class="card">
+            <h3>Hoje</h3>
+            <p id="data-hoje">-</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-apontamento" class="view-section" style="display:none;">
+        <div class="apontamento-card">
+            <div class="sel-funcionario-box">
+                <label>Funcionário:</label>
+                <select id="apontamento-funcionario"></select>
             </div>
-
-
-            <div id="view-relatorios" class="view-section">
-                <div class="toolbar">
-                    <select id="rel_mes"></select>
-                    <select id="rel_ano"></select>
-                    <select id="rel_tipo">
-                        <option value="todos">Visão Geral</option>
-                        <option value="resumo">Apenas Cards</option>
-                        <option value="financeiro">Detalhado Financeiro</option>
-                        <option value="dre">DRE</option>
-                        <option value="fluxo">Fluxo de Caixa</option>
-                        <option value="notas">Detalhado Notas</option>
-                        <option value="estoque">Estoque Baixo</option>
-                                            <option value="apontamento">Apontamento</option>
-</select>
-                    <button class="btn-action" onclick="navegar('relatorios')"><span class="material-icons">refresh</span> Atualizar</button>
-                    <button class="btn-action" onclick="Relatorios.imprimir()" style="background:#34495e"><span class="material-icons">print</span> Imprimir</button>
-                    <button class="btn-action" onclick="Relatorios.exportarExcel()" style="background:#1f7a3a"><span class="material-icons">table_view</span> Excel</button>
-                </div>
-
-                <div id="rel-sec-resumo">
-                    <div class="card-container" id="rel-cards-fin">
-                        <div class="card"><h3>Receitas</h3><div class="valor" id="rel-receitas" style="color:#27ae60">0,00</div></div>
-                        <div class="card"><h3>Despesas</h3><div class="valor" id="rel-despesas" style="color:#e74c3c">0,00</div></div>
-                        <div class="card"><h3>Saldo</h3><div class="valor" id="rel-saldo">0,00</div></div>
-                    </div>
-                    <div class="card-container" id="rel-cards-estoque" style="margin-top:20px;">
-                        <div class="card"><h3>Qtd em Estoque</h3><div class="valor" id="rel-estoque-qtd">0</div></div>
-                        <div class="card"><h3>Valor do Estoque</h3><div class="valor" id="rel-estoque-valor">R$ 0,00</div></div>
-                        <div class="card"><h3>Notas do Mês</h3><div class="valor" id="rel-notas">0</div></div>
-                    </div>
-                </div>
-
-                <div id="rel-sec-financeiro">
-                    <h3 style="margin-top:25px;">Financeiro do Período</h3>
-                    <table><thead><tr><th>Vencimento</th><th>Descrição</th><th>Tipo</th><th>Valor</th><th>Status</th></tr></thead><tbody id="rel-financeiro-corpo"></tbody></table>
-                </div>
-
-                <div id="rel-sec-dre">
-                    <h3 style="margin-top:25px;">DRE do Período</h3>
-                    <div class="card-container" style="margin-top:10px;">
-                        <div class="card"><h3>Receitas</h3><div class="valor" id="dre-receitas" style="color:#27ae60">R$ 0,00</div></div>
-                        <div class="card"><h3>Despesas</h3><div class="valor" id="dre-despesas" style="color:#e74c3c">R$ 0,00</div></div>
-                        <div class="card"><h3>Resultado</h3><div class="valor" id="dre-resultado">R$ 0,00</div></div>
-                    </div>
-                    <table style="margin-top:15px;"><thead><tr><th>Grupo</th><th>Tipo</th><th>Valor</th></tr></thead><tbody id="dre-corpo"></tbody></table>
-                </div>
-
-                <div id="rel-sec-fluxo">
-                    <h3 style="margin-top:25px;">Fluxo de Caixa (Pagos)</h3>
-                    <table style="margin-top:15px;"><thead><tr><th>Data</th><th>Entradas</th><th>Saídas</th><th>Saldo do Dia</th><th>Saldo Acumulado</th></tr></thead><tbody id="fluxo-corpo"></tbody></table>
-                </div>
-
-                <div id="rel-sec-notas">
-                    <h3 style="margin-top:25px;">Notas de Entrada do Período</h3>
-                    <table><thead><tr><th>Data</th><th>Número</th><th>Fornecedor</th><th>Itens</th><th>Valor</th><th>Tipo</th></tr></thead><tbody id="rel-notas-corpo"></tbody></table>
-                </div>
-                <div id="rel-sec-baixo-estoque">
-                    <h3 style="margin-top:25px;">Produtos com Menor Estoque</h3>
-                    <table><thead><tr><th>Cód.</th><th>Produto</th><th>Grupo</th><th>Qtd</th></tr></thead><tbody id="rel-baixo-estoque-corpo"></tbody></table>
-                </div>
             
-            <div id="rel-sec-apontamento" class="section-card" style="display:none;">
-                <h3>Relatório de Apontamento</h3>
-                <div class="toolbar" style="gap:10px; flex-wrap:wrap;">
-                    <div class="form-group" style="min-width:220px;">
-                        <label style="font-size:12px; color:#666;">Funcionário</label>
-                        <select id="rel-apont-funcionario"></select>
-                    </div>
-                    <div class="form-group" style="min-width:160px;">
-                        <label style="font-size:12px; color:#666;">De</label>
-                        <input type="date" id="rel-apont-de" />
-                    </div>
-                    <div class="form-group" style="min-width:160px;">
-                        <label style="font-size:12px; color:#666;">Até</label>
-                        <input type="date" id="rel-apont-ate" />
-                    </div>
-                    <button class="btn-action btn-add" id="btn-rel-apont-buscar" style="height:40px; align-self:flex-end;">Buscar</button>
-                </div>
-
-                <div style="margin-top:10px; display:flex; gap:16px; flex-wrap:wrap;">
-                    <div><b>Total de horas:</b> <span id="rel-apont-total">0:00</span></div>
-                    <div style="color:#999;" id="rel-apont-msg"></div>
-                </div>
-
-                <div style="margin-top:12px; overflow:auto;">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Data</th>
-                                <th>Funcionário</th>
-                                <th>Entrada</th>
-                                <th>Intervalo (início)</th>
-                                <th>Intervalo (fim)</th>
-                                <th>Saída</th>
-                                <th>Horas</th>
-                                <th>Obs.</th>
-                            </tr>
-                        </thead>
-                        <tbody id="rel-apont-corpo"></tbody>
-                    </table>
-                </div>
+            <div class="data-display">
+                <h3 id="apontamento-data">--/--/----</h3>
+                <p id="apontamento-status">Carregando...</p>
             </div>
 
-</div>
-
-            <div id="view-funcionarios" class="view-section">
-                <div class="toolbar">
-                    <button class="btn-action btn-add" id="btnNovoFuncionario"><span class="material-icons">add</span> Novo Funcionário</button>
-                </div>
-                <table>
-                    <thead><tr><th>Nome</th><th>Cargo</th><th>Telefone</th><th>CPF</th><th>Ações</th></tr></thead>
-                    <tbody id="tabela-funcionarios-corpo"></tbody>
-                </table>
+            <div class="botoes-ponto">
+                <button id="btnApEntrada" class="btn-ponto entrada">ENTRADA<br><span id="apontamento-hora-entrada">-</span></button>
+                <button id="btnApIntIni" class="btn-ponto intervalo">SAÍDA INT.<br><span id="apontamento-hora-int-ini">-</span></button>
+                <button id="btnApIntFim" class="btn-ponto intervalo">VOLTA INT.<br><span id="apontamento-hora-int-fim">-</span></button>
+                <button id="btnApSaida" class="btn-ponto saida">SAÍDA<br><span id="apontamento-hora-saida">-</span></button>
             </div>
 
-            <div id="view-fornecedores" class="view-section">
-                <div class="toolbar">
-                    <button class="btn-action btn-add" id="btnNovoFornecedor"><span class="material-icons">add</span> Novo Fornecedor</button>
-                </div>
-                <table>
-                    <thead><tr><th>Nome</th><th>Documento</th><th>Telefone</th><th>Cidade</th><th>Ações</th></tr></thead>
-                    <tbody id="tabela-fornecedores-corpo"></tbody>
-                </table>
+            <div class="obs-box">
+                <label>Observação:</label>
+                <input type="text" id="apontamento-obs" placeholder="Opcional">
             </div>
 
-            <div id="view-usuarios" class="view-section">
-                <div class="toolbar">
-                    <button class="btn-action btn-add" id="btnNovoUsuario"><span class="material-icons">add</span> Novo Usuário</button>
-                </div>
-                <table>
-                    <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Ações</th></tr></thead>
-                    <tbody id="tabela-usuarios-corpo"></tbody>
-                </table>
+            <button id="btnApEditar" style="display:none; margin-top:10px;">Editar Manualmente</button>
+        </div>
+
+        <div id="apontamento-manual" style="display:none; border:1px solid #ccc; padding:10px; margin-top:10px;">
+            <h4>Lançamento Manual</h4>
+            <label>Data: <input type="date" id="ap-man-data"></label><br>
+            <label><input type="checkbox" id="ap-man-folga"> É Folga?</label>
+            <div class="grid-manual">
+                <input type="time" id="ap-man-entrada" title="Entrada">
+                <input type="time" id="ap-man-int-ini" title="Início Intervalo">
+                <input type="time" id="ap-man-int-fim" title="Fim Intervalo">
+                <input type="time" id="ap-man-saida" title="Saída">
             </div>
-
-            <div id="view-configuracoes" class="view-section">
-                <h3>Grupos de Produtos</h3>
-                <div class="toolbar">
-                    <input type="text" id="novo-grupo-nome" placeholder="Nome do grupo">
-                    <button class="btn-action btn-add" id="btnAddGrupo">Adicionar</button>
-                </div>
-                <table style="max-width: 500px;">
-                    <thead><tr><th>Nome do Grupo</th><th>Ações</th></tr></thead>
-                    <tbody id="tabela-config-grupos"></tbody>
-                </table>
-            </div>
-        </main>
-    </div>
-
-    <div id="modal-produto" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span><h3>Cadastro de Produto</h3>
-            <form id="form-produto">
-                <input type="hidden" id="prod_id_edit"><input type="hidden" id="is_edit">
-                <div class="form-row"><div class="form-group" style="flex:1"><label>Código</label><input type="text" id="prod_codigo"></div><div class="form-group" style="flex:2"><label>Nome</label><input type="text" id="prod_nome"></div></div>
-                <div class="form-row"><div class="form-group" style="flex:1"><label>Grupo</label><select id="prod_grupo"></select></div><div class="form-group" style="flex:1"><label>Qtd</label><input type="number" id="prod_qtd" step="0.01"></div><div class="form-group" style="flex:1"><label>Preço</label><input type="number" id="prod_preco" step="0.01"></div></div>
-                <div class="actions"><button class="btn-action btn-add" id="btn-salvar-prod">Salvar</button></div>
-            </form>
+            <button id="btnApSalvarManual" style="margin-top:10px;">Salvar Ajuste</button>
         </div>
-    </div>
+      </section>
 
-    <div id="modal-nota-manual" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
-            <span class="close">&times;</span><h3 id="titulo-modal-nota">Lançamento de Nota</h3>
-            <form id="form-nota-manual">
-                <input type="hidden" id="nota_id_edicao"><input type="hidden" id="nota_is_edit">
-                <div class="form-row" style="background: #f9f9f9; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                    <div class="form-group" style="flex:1"><label>Número</label><input type="text" id="nota_numero"></div>
-                    <div class="form-group" style="flex:1"><label>Data</label><input type="date" id="nota_data"></div>
-                    <div class="form-group" style="flex:2"><label>Fornecedor</label><input type="text" id="nota_fornecedor"></div>
-                </div>
-                <div style="border-top: 1px dashed #ccc; padding-top: 10px; margin-bottom: 10px;">
-                    <label style="font-weight:bold; color:var(--accent);">Adicionar Produto</label>
-                    <div class="form-row" style="position: relative;">
-                        <div class="form-group" style="flex:2"><input type="text" id="input-item-busca" placeholder="Buscar produto..." autocomplete="off"><input type="hidden" id="input-item-codigo"><ul id="lista-sugestoes-manual" class="lista-sugestoes"></ul></div>
-                        <div class="form-group" style="flex:1"><input type="number" id="input-item-qtd" placeholder="Qtd"></div>
-                        <div class="form-group" style="flex:1"><input type="number" id="input-item-preco" placeholder="Unit."></div>
-                        <button type="button" class="btn-action" id="btnAddItemNota" style="height: 42px; margin-top: 24px;">+</button>
-                    </div>
-                </div>
-                <div style="max-height: 200px; overflow-y: auto; border: 1px solid #eee;"><table><thead><tr><th>Cód</th><th>Produto</th><th>Qtd</th><th>Unit.</th><th>Total</th><th></th></tr></thead><tbody id="tabela-itens-nota-manual"></tbody></table></div>
-                <div id="msg-sem-itens" style="text-align:center; padding:10px; color:#aaa;">Nenhum item</div>
-                <div style="text-align:right; margin-top:10px; font-size:18px;">Qtd: <b id="display-total-qtd">0</b> | Total: <b id="display-total-valor" style="color:var(--accent)">R$ 0,00</b></div>
-                <div class="actions"><button class="btn-action btn-add" id="btn-salvar-nota">Salvar Nota Completa</button></div>
-            </form>
-        </div>
-    </div>
+      <section id="view-funcionarios" class="view-section" style="display:none;">
+        <button id="btnNovoFuncionario" class="btn-add">+ Novo Funcionário</button>
+        <table class="tabela-padrao">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>CPF</th>
+                    <th>Função</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="lista-funcionarios-corpo"></tbody>
+        </table>
+      </section>
 
-    <div id="modal-nova-despesa" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span><h3>Lançamento Financeiro</h3>
-            <form id="form-financeiro-manual">
-                <input type="hidden" id="fin_man_id">
-                <div class="opt-tipo"><div id="opt-despesa" class="selected">Despesa (Pagar)</div><div id="opt-receita">Receita (Receber)</div></div>
-                <div class="form-group"><label>Descrição</label><input type="text" id="fin_man_descricao"></div>
-                <div class="form-group"><label>Fornecedor / Cliente</label><input type="text" id="fin_man_fornecedor"></div>
-                <div class="form-row"><div class="form-group"><label>Valor Total</label><input type="number" id="fin_man_valor" step="0.01"></div><div class="form-group"><label>Status</label><select id="fin_man_status"><option value="Pendente">Pendente</option><option value="Pago">Pago</option></select></div></div>
-                <div class="form-row"><div class="form-group"><label>Emissão</label><input type="date" id="fin_man_emissao"></div><div class="form-group"><label>1º Vencimento</label><input type="date" id="fin_man_vencimento"></div></div>
-                <div class="actions"><button class="btn-action btn-add" id="btn-salvar-fin-manual">Salvar</button></div>
-            </form>
-        </div>
-    </div>
+      <section id="view-usuarios" class="view-section" style="display:none;">
+        <button id="btnNovoUsuario" class="btn-add">+ Novo Usuário</button>
+        <table class="tabela-padrao">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Login</th>
+                    <th>Perfil</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="lista-usuarios-corpo"></tbody>
+        </table>
+      </section>
 
-    <div id="modal-contagem" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span><h3>Contagem Estoque</h3>
-            <div class="form-row" style="position:relative;"><div class="form-group" style="flex:3"><input type="text" id="input-busca-contagem" placeholder="Buscar produto..." autocomplete="off"><ul id="lista-sugestoes-contagem" class="lista-sugestoes"></ul></div><div class="form-group" style="flex:1"><input type="number" id="input-qtd-contagem" placeholder="Nova Qtd" disabled></div><button class="btn-action" id="btn-add-contagem" disabled>OK</button></div>
-            <table style="margin-top:10px;"><thead><tr><th>Produto</th><th>Atual</th><th>Nova</th><th>Dif</th><th></th></tr></thead><tbody id="lista-contagem-corpo"></tbody></table>
-            <p id="msg-vazio-contagem" style="text-align:center; color:#ccc; padding:20px;">Lista vazia</p>
-            <div class="form-group"><label>Observação</label><input type="text" id="obs-contagem"></div>
-            <div class="actions"><button class="btn-action btn-add" id="btnSalvarContagem">Processar Ajuste</button></div>
-        </div>
-    </div>
+      <section id="view-relatorios" class="view-section" style="display:none;">
+          <h3>Relatórios em breve...</h3>
+      </section>
+      <section id="view-caixa" class="view-section" style="display:none;">
+          <h3>Caixa em breve...</h3>
+      </section>
 
-    <div id="modal-importar-xml" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span><h3>Importar XML (NFe)</h3>
-            <div style="padding: 30px; border: 2px dashed #ccc; text-align: center; margin: 20px 0;"><input type="file" id="file-xml" accept=".xml"><p style="color:#888; margin-top:10px;">Selecione o arquivo .xml</p></div>
-            <div class="actions"><button class="btn-action btn-add" id="btn-processar-xml">Importar e Salvar</button></div>
-        </div>
-    </div>
+    </main>
+  </div>
 
-    <div id="modal-usuario" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span><h3>Usuário</h3>
-            <form id="form-usuario">
-                <input type="hidden" id="usuario_id_edit">
-                <div class="form-group"><label>Nome</label><input type="text" id="user_nome"></div>
-                <div class="form-group"><label>Login</label><input type="text" id="user_login"></div>
-                <div class="form-group"><label>Senha</label><input type="password" id="user_senha"></div>
-                <div class="form-group"><label>Perfil</label><select id="user_perfil"><option value="Admin">Admin</option><option value="Usuario">Usuário</option><option value="Funcionario">Funcionário</option></select></div>
-                <div class="form-group" style="margin-top:10px;">
-                    <label style="display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" id="user_eh_funcionario" />
-                        <span>Este usuário é um funcionário</span>
-                    </label>
-                </div>
-                <div class="form-group" id="grp-user-funcionario" style="display:none;">
-                    <label>Vincular ao Funcionário</label>
-                    <select id="user_funcionario_id"></select>
-                    <small style="color:#888;">* Somente funcionários ativos aparecem na lista.</small>
-                </div>
-
-                <div class="actions"><button class="btn-action btn-add" id="btn-salvar-usuario">Salvar</button></div>
-            </form>
-        </div>
-    </div>
-
-  <!-- Modal Trocar Senha (Usuário Logado) -->
-  <div id="modal-trocar-senha" class="modal">
+  <div id="modal-usuario" class="modal">
     <div class="modal-content">
-      <span class="close" id="fechar-modal-trocar-senha">&times;</span>
-      <h3>Trocar Senha</h3>
-
-      <form id="form-trocar-senha">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Nome</label>
-            <input type="text" id="ts-nome" disabled />
-          </div>
-          <div class="form-group">
-            <label>Login</label>
-            <input type="text" id="ts-login" disabled />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Senha atual</label>
-            <input type="password" id="ts-atual" autocomplete="current-password" required />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Nova senha</label>
-            <input type="password" id="ts-nova" autocomplete="new-password" required />
-          </div>
-          <div class="form-group">
-            <label>Confirmar nova senha</label>
-            <input type="password" id="ts-confirmar" autocomplete="new-password" required />
-          </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary">Salvar</button>
-      </form>
+        <span class="close-modal">&times;</span>
+        <h3>Salvar Usuário</h3>
+        <input type="hidden" id="usuario_id_edit">
+        <label>Nome:</label><input type="text" id="user_nome">
+        <label>Login:</label><input type="text" id="user_login">
+        <label>Senha:</label><input type="text" id="user_senha">
+        <label>Perfil:</label>
+        <select id="user_perfil">
+            <option value="Funcionario">Funcionário</option>
+            <option value="Admin">Administrador</option>
+        </select>
+        <button id="btnSalvarUsuario" class="btn-save">Salvar</button>
     </div>
   </div>
-    <div id="modal-funcionario" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span><h3>Cadastro de Funcionário</h3>
-            <form id="form-funcionario">
-                <input type="hidden" id="func_id_edit">
-                <div class="form-group"><label>Nome</label><input type="text" id="func_nome"></div>
-                <div class="form-row">
-                    <div class="form-group"><label>CPF</label><input type="text" id="func_cpf"></div>
-                    <div class="form-group"><label>Telefone</label><input type="text" id="func_telefone"></div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group"><label>Cargo</label><input type="text" id="func_cargo"></div>
-                    <div class="form-group"><label>Salário</label><input type="number" id="func_salario" step="0.01"></div>
-                </div>
-                <div class="form-group"><label>Data Admissão</label><input type="date" id="func_admissao"></div>
-                <div class="actions"><button class="btn-action btn-add" id="btn-salvar-func">Salvar</button></div>
-            </form>
-        </div>
-    </div>
 
-    <div id="modal-fornecedor" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span><h3>Cadastro de Fornecedor</h3>
-            <form id="form-fornecedor">
-                <input type="hidden" id="forn_id_edit">
-                <div class="form-group"><label>Nome / Razão Social</label><input type="text" id="forn_nome"></div>
-                <div class="form-row">
-                    <div class="form-group"><label>CNPJ / CPF</label><input type="text" id="forn_documento"></div>
-                    <div class="form-group"><label>Telefone</label><input type="text" id="forn_telefone"></div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group"><label>Email</label><input type="email" id="forn_email"></div>
-                    <div class="form-group"><label>Cidade</label><input type="text" id="forn_cidade"></div>
-                </div>
-                <div class="actions"><button class="btn-action btn-add" id="btn-salvar-forn">Salvar</button></div>
-            </form>
-        </div>
+  <div id="modal-funcionario" class="modal">
+    <div class="modal-content">
+        <span class="close-modal">&times;</span>
+        <h3>Salvar Funcionário</h3>
+        <input type="hidden" id="func_id_edit">
+        <label>Nome Completo:</label><input type="text" id="func_nome">
+        <label>CPF:</label><input type="text" id="func_cpf">
+        <label>Função:</label><input type="text" id="func_funcao">
+        <button id="btnSalvarFuncionario" class="btn-save">Salvar</button>
     </div>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script type="module" src="./src/main.js"></script>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
